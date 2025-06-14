@@ -9,7 +9,7 @@ extern "C"
     int md_get_motion();
 
     int md_is_monitoring_active();
-    int md_start_monitoring(const char *ifname, const char *mac, unsigned interval);
+    int md_start_monitoring(const char *ifname, unsigned interval);
     int md_stop_monitoring();
 
     int md_set_antenna_idx(unsigned idx);

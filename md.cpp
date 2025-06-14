@@ -15,9 +15,9 @@ extern "C"
         return (int)MotionDetector::getInstance().getIsMonitoring();
     }
 
-    int md_start_monitoring(const char *ifname, const char *mac, unsigned interval)
+    int md_start_monitoring(const char *ifname, unsigned interval)
     {
-        int ret = MotionDetector::getInstance().startMonitoring(ifname, mac, interval);
+        int ret = MotionDetector::getInstance().startMonitoring(ifname, interval);
 
         return ret;
     }

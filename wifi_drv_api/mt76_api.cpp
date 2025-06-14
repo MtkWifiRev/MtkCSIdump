@@ -283,7 +283,7 @@ public:
         return &csi_list;
     }
 
-    int md_csi_set_attr(int band, struct nl_msg *msg, u8 mode, u8 type, u8 v1, u32 v2, char *mac_addr)
+    int md_csi_set_attr(int band, struct nl_msg *msg, u8 mode, u8 type, u8 v1, u32 v2)
     {
         nlattr *data;
         u8 a[ETH_ALEN];
@@ -300,27 +300,10 @@ public:
 
         nla_nest_end(msg, data);
 
-        matches = sscanf(mac_addr, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-                 a, a + 1, a + 2, a + 3, a + 4, a + 5);
-
-        if (matches != ETH_ALEN)
-            return -EINVAL;
-
-        data = nla_nest_start(msg, MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR | NLA_F_NESTED);
-        if (!data)
-            return -ENOMEM;
-
-        for (i = 0; i < ETH_ALEN; i++)
-            nla_put_u8(msg, i, a[i]);
-
-        nla_nest_end(msg, data);
-
-        //nla_put_u8(msg, MTK_VENDOR_ATTR_CSI_CTRL_BAND_IDX, band);
-
         return 0;
     }
 
-    int md_csi_set(int band, int idx, u8 mode, u8 type, u8 v1, u32 v2, char *mac_addr)
+    int md_csi_set(int band, int idx, u8 mode, u8 type, u8 v1, u32 v2)
     {
         struct nl_msg *msg;
         nlattr *data;
@@ -345,14 +328,13 @@ public:
         if (!data)
             return -ENOMEM;
 
-        md_csi_set_attr(band, msg, mode, type, v1, v2, mac_addr);
+        md_csi_set_attr(band, msg, mode, type, v1, v2);
 
         nla_nest_end(msg, data);
 
         ret = unl_genl_request(&unl, msg, NULL, NULL);
         if (ret)  {
             fprintf(stderr, "nl80211 call failed: %s\n", strerror(-ret));
-            fprintf(stderr, "nl80211 call failed, mac addr %s\n", mac_addr);
         }
 
         unl_free(&unl);
@@ -360,7 +342,7 @@ public:
         return ret;
     }
 
-    int motion_detection_start(const char *wifi, const char *mac_addr, u32 interval)
+    int motion_detection_start(const char *wifi, u32 interval)
     {
         int band, if_idx;
         int ret = 0;
@@ -374,29 +356,30 @@ public:
 
         band = strtoul(wifi + (strlen(wifi) - 1), NULL, 0);
 
-        ret = md_csi_set(band, if_idx, 1, 0, 0, 0, (char *)"00:00:00:00:00:00");
+        ret = md_csi_set(band, if_idx, 2, 3, 0, 34);
+        if (ret)
+        {
+            fprintf(stderr, "md start: md_csi_set (QoS data) failed: %s\n", strerror(-ret));
+            return ret;
+        }
+        ret = md_csi_set(band, if_idx, 2, 9, 1, 0);
+        if (ret)
+        {
+            fprintf(stderr, "md start: md_csi_set (data output by event) failed: %s\n", strerror(-ret));
+            return ret;
+        }
+
+        ret = md_csi_set(band, if_idx, 1, 0, 0, 0);
         if (ret)
         {
             fprintf(stderr, "md start: md_csi_set (csi start) failed: %s\n", strerror(-ret));
-            return ret;
-        }
-        ret = md_csi_set(band, if_idx, 2, 9, 0, 1, (char *)mac_addr);
-        if (ret)
-        {
-            fprintf(stderr, "md start: md_csi_set (MAC) failed: %s\n", strerror(-ret));
-            return ret;
-        }
-        ret = md_csi_set(band, if_idx, 2, 9, 2, interval, (char *)"00:00:00:00:00:00");
-        if (ret)
-        {
-            fprintf(stderr, "md start: md_csi_set (interval) failed: %s\n", strerror(-ret));
             return ret;
         }
 
         return ret;
     }
 
-    int motion_detection_stop(const char *wifi, const char *mac_addr)
+    int motion_detection_stop(const char *wifi)
     {
         int band, if_idx;
         int ret = 0;
@@ -410,16 +393,10 @@ public:
 
         band = strtoul(wifi + (strlen(wifi) - 1), NULL, 0);
 
-        ret = md_csi_set(band, if_idx, 0, 0, 0, 0, (char *)"00:00:00:00:00:00");
+        ret = md_csi_set(band, if_idx, 0, 0, 0, 0);
         if (ret)
         {
             fprintf(stderr, "md stop: md_csi_set (csi stop) failed: %s\n", strerror(-ret));
-            return ret;
-        }
-        ret = md_csi_set(band, if_idx, 2, 9, 0, 0, (char *)mac_addr);
-        if (ret)
-        {
-            fprintf(stderr, "md stop: md_csi_set (remove MAC) failed: %s\n", strerror(-ret));
             return ret;
         }
 
@@ -442,12 +419,12 @@ std::vector<csi_data *> *MT76API::motion_detection_dump(const char *wifi, int pk
     return d->motion_detection_dump(wifi, pkt_num);
 }
 
-int MT76API::motion_detection_start(const char *wifi, const char *mac_addr, u32 interval)
+int MT76API::motion_detection_start(const char *wifi, u32 interval)
 {
-    return d->motion_detection_start(wifi, mac_addr, interval);
+    return d->motion_detection_start(wifi, interval);
 }
 
-int MT76API::motion_detection_stop(const char *wifi, const char *mac_addr)
+int MT76API::motion_detection_stop(const char *wifi)
 {
-    return d->motion_detection_stop(wifi, mac_addr);
+    return d->motion_detection_stop(wifi);
 }

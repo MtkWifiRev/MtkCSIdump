@@ -58,7 +58,7 @@ void MotionDetector::runMonitoring()
     }
 }
 
-int MotionDetector::startMonitoring(std::string ifname, std::string mac, unsigned interval)
+int MotionDetector::startMonitoring(std::string ifname, unsigned interval)
 {
     int ret;
 
@@ -69,10 +69,9 @@ int MotionDetector::startMonitoring(std::string ifname, std::string mac, unsigne
         return -1;
 
     this->ifname = ifname;
-    this->mac = mac;
     this->interval = interval;
 
-    ret = wifi.motion_detection_start(this->ifname.c_str(), this->mac.c_str(), this->interval);
+    ret = wifi.motion_detection_start(this->ifname.c_str(), this->interval);
     startMon = std::chrono::steady_clock::now();
     if (!ret)
     {
@@ -92,12 +91,11 @@ int MotionDetector::stopMonitoring()
     if (monitorWorker.joinable())
         monitorWorker.join();
 
-    ret = wifi.motion_detection_stop(ifname.c_str(), mac.c_str());
+    ret = wifi.motion_detection_stop(ifname.c_str());
     if (!ret)
     {
         isMonitoring = false;
         ifname.clear();
-        mac.clear();
         interval = 0;
     }
 

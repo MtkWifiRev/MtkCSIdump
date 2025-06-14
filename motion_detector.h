@@ -15,7 +15,7 @@ public:
     MotionDetector(const MotionDetector&) = delete;
     MotionDetector& operator=(const MotionDetector&) = delete;
 
-    int startMonitoring(std::string ifname, std::string mac, unsigned interval);
+    int startMonitoring(std::string ifname, unsigned interval);
     int stopMonitoring();
 
     int setAntennaIdx(unsigned idx);
@@ -25,7 +25,6 @@ public:
 
 private:
     std::string ifname;
-    std::string mac;
     unsigned interval;
     unsigned antMonIdx;
 

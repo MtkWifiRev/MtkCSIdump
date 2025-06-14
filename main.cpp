@@ -31,7 +31,7 @@ int main(int argc, char **argv)
     if (sigaction(SIGINT, &sig, NULL) || sigaction(SIGTERM, &sig, NULL))
         std::cerr << "sigaction error" << std::endl;
 
-    if (argc != 6)
+    if (argc != 5)
     {
         std::cout << "Need 4 arguments: DEVIATION_MIN DEVIATION_MAX wifi_interface mac_addr interval" << std::endl;
     }
@@ -39,7 +39,7 @@ int main(int argc, char **argv)
     DEVIATION_MIN = atof(argv[1]);
     DEVIATION_MAX = atof(argv[2]);
 
-    md.startMonitoring(argv[3], argv[4], std::stoul(argv[5]));
+    md.startMonitoring(argv[3], std::stoul(argv[4]));
 
     while (!stop)
     {
