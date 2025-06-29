@@ -23,6 +23,7 @@ extern "C"
 
 #define MTK_NL80211_VENDOR_ID 0x0ce7
 #define CSI_DUMP_PER_NUM 3
+#define CSI_MAX_COUNT 256
 
 static struct unl unl;
 enum mtk_nl80211_vendor_subcmds
@@ -45,15 +46,11 @@ enum mtk_vendor_attr_csi_ctrl
     MTK_VENDOR_ATTR_CSI_CTRL_CFG_VAL1,
     MTK_VENDOR_ATTR_CSI_CTRL_CFG_VAL2,
     MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR,
+    MTK_VENDOR_ATTR_CSI_CTRL_INTERVAL,
 
     MTK_VENDOR_ATTR_CSI_CTRL_DUMP_NUM,
 
     MTK_VENDOR_ATTR_CSI_CTRL_DATA,
-
-/*    MTK_VENDOR_ATTR_CSI_CTRL_BAND_IDX, 
-
-    MTK_VENDOR_ATTR_CSI_CTRL_STA_INTERVAL,
-*/
 
     /* keep last */
     NUM_MTK_VENDOR_ATTRS_CSI_CTRL,
@@ -73,7 +70,6 @@ enum mtk_vendor_attr_csi_data
     MTK_VENDOR_ATTR_CSI_DATA_BW,
     MTK_VENDOR_ATTR_CSI_DATA_CH_IDX,
     MTK_VENDOR_ATTR_CSI_DATA_TA,
-    MTK_VENDOR_ATTR_CSI_DATA_NUM,
     MTK_VENDOR_ATTR_CSI_DATA_I,
     MTK_VENDOR_ATTR_CSI_DATA_Q,
     MTK_VENDOR_ATTR_CSI_DATA_INFO,
@@ -84,13 +80,15 @@ enum mtk_vendor_attr_csi_data
     MTK_VENDOR_ATTR_CSI_DATA_TX_ANT,
     MTK_VENDOR_ATTR_CSI_DATA_RX_ANT,
     MTK_VENDOR_ATTR_CSI_DATA_MODE,
-    MTK_VENDOR_ATTR_CSI_DATA_CHAIN_INFO,
+    MTK_VENDOR_ATTR_CSI_DATA_H_IDX,
 
     /* keep last */
     NUM_MTK_VENDOR_ATTRS_CSI_DATA,
     MTK_VENDOR_ATTR_CSI_DATA_MAX =
-        NUM_MTK_VENDOR_ATTRS_CSI_DATA - 1
+            NUM_MTK_VENDOR_ATTRS_CSI_DATA - 1
 };
+
+
 static struct nla_policy csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL];
 static struct nla_policy csi_data_policy[NUM_MTK_VENDOR_ATTRS_CSI_DATA];
 static std::vector<csi_data *> csi_list;
@@ -118,14 +116,14 @@ public:
         csi_data_policy[MTK_VENDOR_ATTR_CSI_DATA_BW].type = NLA_U8;
         csi_data_policy[MTK_VENDOR_ATTR_CSI_DATA_CH_IDX].type = NLA_U8;
         csi_data_policy[MTK_VENDOR_ATTR_CSI_DATA_TA].type = NLA_NESTED;
-        csi_data_policy[MTK_VENDOR_ATTR_CSI_DATA_NUM].type = NLA_U32;
         csi_data_policy[MTK_VENDOR_ATTR_CSI_DATA_I].type = NLA_NESTED;
         csi_data_policy[MTK_VENDOR_ATTR_CSI_DATA_Q].type = NLA_NESTED;
         csi_data_policy[MTK_VENDOR_ATTR_CSI_DATA_INFO].type = NLA_U32;
+
         csi_data_policy[MTK_VENDOR_ATTR_CSI_DATA_TX_ANT].type = NLA_U8;
         csi_data_policy[MTK_VENDOR_ATTR_CSI_DATA_RX_ANT].type = NLA_U8;
         csi_data_policy[MTK_VENDOR_ATTR_CSI_DATA_MODE].type = NLA_U8;
-        csi_data_policy[MTK_VENDOR_ATTR_CSI_DATA_CHAIN_INFO].type = NLA_U32;
+        csi_data_policy[MTK_VENDOR_ATTR_CSI_DATA_H_IDX].type = NLA_U32;
     }
     ~MT76APIPrivate()
     {
@@ -174,7 +172,7 @@ public:
               tb_data[MTK_VENDOR_ATTR_CSI_DATA_Q] &&
               tb_data[MTK_VENDOR_ATTR_CSI_DATA_INFO] &&
               tb_data[MTK_VENDOR_ATTR_CSI_DATA_MODE] &&
-              tb_data[MTK_VENDOR_ATTR_CSI_DATA_CHAIN_INFO]))
+              tb_data[MTK_VENDOR_ATTR_CSI_DATA_H_IDX]))
         {
             fprintf(stderr, "Attributes error for CSI data\n");
             return NL_SKIP;
@@ -194,11 +192,9 @@ public:
         c->rx_idx = nla_get_u16(tb_data[MTK_VENDOR_ATTR_CSI_DATA_RX_ANT]);
 
         c->ext_info = nla_get_u32(tb_data[MTK_VENDOR_ATTR_CSI_DATA_INFO]);
-        c->chain_info = nla_get_u32(tb_data[MTK_VENDOR_ATTR_CSI_DATA_CHAIN_INFO]);
+        c->h_idx = nla_get_u32(tb_data[MTK_VENDOR_ATTR_CSI_DATA_H_IDX]);
 
         c->ts = nla_get_u32(tb_data[MTK_VENDOR_ATTR_CSI_DATA_TS]);
-
-        c->data_num = nla_get_u32(tb_data[MTK_VENDOR_ATTR_CSI_DATA_NUM]);
 
         idx = 0;
         nla_for_each_nested(cur, tb_data[MTK_VENDOR_ATTR_CSI_DATA_TA], rem)
@@ -210,16 +206,17 @@ public:
         idx = 0;
         nla_for_each_nested(cur, tb_data[MTK_VENDOR_ATTR_CSI_DATA_I], rem)
         {
-            if (idx < c->data_num)
+            if (idx < CSI_MAX_COUNT)
                 c->data_i[idx++] = nla_get_u16(cur);
         }
 
         idx = 0;
         nla_for_each_nested(cur, tb_data[MTK_VENDOR_ATTR_CSI_DATA_Q], rem)
         {
-            if (idx < c->data_num)
+            if (idx < CSI_MAX_COUNT)
                 c->data_q[idx++] = nla_get_u16(cur);
         }
+
         csi_list.push_back(c);
 
         return NL_SKIP;

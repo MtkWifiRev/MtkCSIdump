@@ -26,25 +26,22 @@ void MotionDetector::runMonitoring()
 
     KurtosisMotionEstimator motionEstimator[ANTENNA_NUM];
 
-    while (!stopFlag.load())
-    {
+    while (!stopFlag.load()) {
         // pkt_num = (time from last[ms] / interval) * 4
         currTime = std::chrono::steady_clock::now();
         diff = std::chrono::duration_cast<std::chrono::milliseconds>(currTime - oldTime).count();
-        pkt_num = (diff / interval) * 4;;
+        //pkt_num = (diff / interval) * 4;;
+        pkt_num = 100;
         std::vector<csi_data *> *list = wifi.motion_detection_dump(ifname.c_str(), pkt_num);
         oldTime = currTime;
 
         dataMutex.lock();
         unsigned antIdx = antMonIdx;
         dataMutex.unlock();
-        for (int i = 0 ; i < ANTENNA_NUM; i++)
-        {
-            if (list)
-            {
+        for (int i = 0 ; i < ANTENNA_NUM; i++) {
+            if (list) {
                 std::vector<std::vector<double>> parsed_data = parser.processRawData(list, i);
-                if (parsed_data.size())
-                {
+                if (parsed_data.size()) {
                     fprintf(stderr, "!!!!!!!!!!! found data: %d !!!!!!!!!!!!!!!\n", parsed_data.size());
                 } else {
                     fprintf(stderr, "Dump List Empty!\n");

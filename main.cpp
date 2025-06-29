@@ -33,7 +33,7 @@ int main(int argc, char **argv)
 
     if (argc != 5)
     {
-        std::cout << "Need 4 arguments: DEVIATION_MIN DEVIATION_MAX wifi_interface mac_addr interval" << std::endl;
+        std::cout << "Need 4 arguments: DEVIATION_MIN DEVIATION_MAX wifi_interface interval" << std::endl;
     }
 
     DEVIATION_MIN = atof(argv[1]);

@@ -42,6 +42,7 @@ struct csi_data
     u8 remain_last;
     u16 pkt_sn;
     u8 tr_stream;
+    u32 h_idx;
 };
 
 class MT76APIPrivate;
