@@ -5,7 +5,24 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <vector>
+#include <cstdint>
 #include "wifi_drv_api/mt76_api.h"
+
+// Simple structs for UDP data transmission
+struct CsiPacketHeader {
+    uint64_t timestamp;
+    uint32_t antenna_idx;
+    uint32_t packet_count;
+    uint32_t total_samples;
+} __attribute__((packed));
+
+struct CsiSample {
+    double value;
+} __attribute__((packed));
 
 class MotionDetector
 {
@@ -22,6 +39,12 @@ public:
     unsigned getAntennaIdx();
     double getMotion();
     bool getIsMonitoring();
+    
+    // UDP server methods
+    int startUdpServer(int port);
+    int stopUdpServer();
+    void addUdpClient(const std::string& clientIp, int clientPort);
+    void removeUdpClient(const std::string& clientIp, int clientPort);
 
 private:
     std::string ifname;
@@ -36,9 +59,16 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> startMon;
 
     MT76API wifi;
+    
+    // UDP server variables
+    int udpSocket;
+    bool udpServerRunning;
+    std::vector<std::pair<std::string, int>> udpClients;
+    std::mutex udpMutex;
 
-    MotionDetector() = default;
+    MotionDetector() : udpSocket(-1), udpServerRunning(false) {}
     static MotionDetector* instance;
 
     void runMonitoring();
+    void sendCsiDataUdp(const std::vector<std::vector<double>>& data, int antennaIdx);
 };

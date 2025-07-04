@@ -12,7 +12,8 @@ std::vector<std::vector<double>> ParserMT76::processRawData(void *data, int antI
     std::vector<std::vector<std::complex<double>>> csi_per_antenna(ANTENNA_NUM, std::vector<std::complex<double>>(CSI_BW160_DATA_COUNT));
     std::vector<double> csi_antenna_real(std::vector<double>(CSI_BW160_DATA_COUNT));
     std::vector<csi_data *> *list = (std::vector<csi_data *>*)data;
-    static std::vector<std::vector<double>> tones_per_packet[3];
+    //static std::vector<std::vector<double>> tones_per_packet[3];
+    std::vector<std::vector<double>> tones_per_packet[3];
 
     for (int it = 0; it < list->size(); it++)
     {
@@ -38,8 +39,8 @@ std::vector<std::vector<double>> ParserMT76::processRawData(void *data, int antI
                     csi_antenna_real[i] = std::abs(csi_per_antenna[antIdx][i]);
                 }
 
-                if (tones_per_packet[antIdx].size() == 5)
-                    tones_per_packet[antIdx].clear();
+                //if (tones_per_packet[antIdx].size() == 5)
+                //    tones_per_packet[antIdx].clear();
 
                 //std::vector<double> arr(csi_antenna_real.begin(), csi_antenna_real.begin() + csi->data_num);
                 std::vector<double> arr(csi_antenna_real.begin(), csi_antenna_real.begin() + recv_i_q_num);
@@ -47,12 +48,12 @@ std::vector<std::vector<double>> ParserMT76::processRawData(void *data, int antI
                 tones_per_packet[antIdx].push_back(arr);
             }
         }
-        fprintf(stderr, "\tprocessRawData() got %d non-zero I/Q, overall: %d\n", recv_i_q_num, tones_per_packet[antIdx].size());
+        fprintf(stderr, "\tprocessRawData() got %d non-zero I/Q\n", recv_i_q_num);
     }
 
 
-    if (tones_per_packet[antIdx].size() == 5)
-        return tones_per_packet[antIdx];
+    //if (tones_per_packet[antIdx].size() == 5)
+    return tones_per_packet[antIdx];
 
-    return {};
+    //return {};
 }

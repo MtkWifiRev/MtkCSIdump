@@ -7,11 +7,7 @@
 #include <fstream>
 #include <unistd.h>
 
-#include "estimators/kurtosis_motion_estimator.h"
 #include "motion_detector.h"
-
-extern double DEVIATION_MIN;
-extern double DEVIATION_MAX;
 
 MotionDetector& md = MotionDetector::getInstance();
 int stop = 0;
@@ -19,6 +15,7 @@ int stop = 0;
 void signalHandler(int)
 {
     md.stopMonitoring();
+    md.stopUdpServer();
     stop = 1;
 }
 
@@ -31,15 +28,23 @@ int main(int argc, char **argv)
     if (sigaction(SIGINT, &sig, NULL) || sigaction(SIGTERM, &sig, NULL))
         std::cerr << "sigaction error" << std::endl;
 
-    if (argc != 5)
+    if (argc != 4)
     {
-        std::cout << "Need 4 arguments: DEVIATION_MIN DEVIATION_MAX wifi_interface interval" << std::endl;
+        std::cout << "Need 3 arguments: wifi_interface interval udp_port" << std::endl;
+        return -1;
     }
 
-    DEVIATION_MIN = atof(argv[1]);
-    DEVIATION_MAX = atof(argv[2]);
+    // Start UDP server
+    int udpPort = std::stoi(argv[3]);
+    if (md.startUdpServer(udpPort) != 0) {
+        std::cerr << "Failed to start UDP server on port " << udpPort << std::endl;
+        return -1;
+    }
 
-    md.startMonitoring(argv[3], std::stoul(argv[4]));
+    // Example: Add a client (you can modify this or add clients dynamically)
+    md.addUdpClient("192.168.178.53", 8888);
+
+    md.startMonitoring(argv[1], std::stoul(argv[2]));
 
     while (!stop)
     {

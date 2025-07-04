@@ -1,10 +1,11 @@
 #include "motion_detector.h"
 #include "wifi_drv_api/mt76_api.h"
-#include "estimators/kurtosis_motion_estimator.h"
 #include "parsers/parser_mt76.h"
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include <cstring>
+#include <unistd.h>
 
 MotionDetector* MotionDetector::instance = nullptr;
 
@@ -24,7 +25,6 @@ void MotionDetector::runMonitoring()
     int pkt_num;
     ParserMT76 parser;
 
-    KurtosisMotionEstimator motionEstimator[ANTENNA_NUM];
 
     while (!stopFlag.load()) {
         // pkt_num = (time from last[ms] / interval) * 4
@@ -43,6 +43,13 @@ void MotionDetector::runMonitoring()
                 std::vector<std::vector<double>> parsed_data = parser.processRawData(list, i);
                 if (parsed_data.size()) {
                     fprintf(stderr, "!!!!!!!!!!! found data: %d !!!!!!!!!!!!!!!\n", parsed_data.size());
+                    for (int j = 0; j < parsed_data.size(); j++) {
+                        fprintf(stderr, "!!!!!!!!!!! found packets inside data: #[%d] %d !!!!!!!!!!!!!!!\n", j, parsed_data[j].size());
+                    }
+                    // Send CSI data via UDP if server is running
+                    if (udpServerRunning) {
+                        sendCsiDataUdp(parsed_data, i);
+                    }
                 } else {
                     fprintf(stderr, "Dump List Empty!\n");
                 }
@@ -133,4 +140,147 @@ double MotionDetector::getMotion()
 bool MotionDetector::getIsMonitoring()
 {
     return isMonitoring;
+}
+
+int MotionDetector::startUdpServer(int port)
+{
+    if (udpServerRunning) {
+        std::cerr << "UDP server is already running" << std::endl;
+        return -1;
+    }
+
+    // Create UDP socket
+    udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (udpSocket < 0) {
+        std::cerr << "Failed to create UDP socket: " << strerror(errno) << std::endl;
+        return -1;
+    }
+
+    // Set socket options
+    int opt = 1;
+    if (setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        std::cerr << "Failed to set socket options: " << strerror(errno) << std::endl;
+        close(udpSocket);
+        return -1;
+    }
+
+    udpServerRunning = true;
+    std::cout << "UDP server started successfully on port " << port << std::endl;
+    return 0;
+}
+
+int MotionDetector::stopUdpServer()
+{
+    if (!udpServerRunning) {
+        return 0;
+    }
+
+    udpServerRunning = false;
+    
+    if (udpSocket >= 0) {
+        close(udpSocket);
+        udpSocket = -1;
+    }
+
+    udpMutex.lock();
+    udpClients.clear();
+    udpMutex.unlock();
+
+    std::cout << "UDP server stopped" << std::endl;
+    return 0;
+}
+
+void MotionDetector::addUdpClient(const std::string& clientIp, int clientPort)
+{
+    udpMutex.lock();
+    udpClients.push_back(std::make_pair(clientIp, clientPort));
+    udpMutex.unlock();
+    
+    std::cout << "Added UDP client: " << clientIp << ":" << clientPort << std::endl;
+}
+
+void MotionDetector::removeUdpClient(const std::string& clientIp, int clientPort)
+{
+    udpMutex.lock();
+    auto it = std::find(udpClients.begin(), udpClients.end(), std::make_pair(clientIp, clientPort));
+    if (it != udpClients.end()) {
+        udpClients.erase(it);
+        std::cout << "Removed UDP client: " << clientIp << ":" << clientPort << std::endl;
+    }
+    udpMutex.unlock();
+}
+
+void MotionDetector::sendCsiDataUdp(const std::vector<std::vector<double>>& data, int antennaIdx)
+{
+    if (!udpServerRunning || udpSocket < 0) {
+        return;
+    }
+
+    udpMutex.lock();
+    auto clients = udpClients; // Copy to avoid holding lock too long
+    udpMutex.unlock();
+
+    if (clients.empty()) {
+        return;
+    }
+
+    // Calculate total number of samples
+    uint32_t totalSamples = 0;
+    for (const auto& packet : data) {
+        totalSamples += packet.size();
+    }
+
+    // Create header
+    CsiPacketHeader header;
+    header.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    header.antenna_idx = static_cast<uint32_t>(antennaIdx);
+    header.packet_count = static_cast<uint32_t>(data.size());
+    header.total_samples = totalSamples;
+
+    // Calculate total message size
+    size_t messageSize = sizeof(CsiPacketHeader) + totalSamples * sizeof(CsiSample);
+    
+    // Allocate buffer
+    std::vector<uint8_t> buffer(messageSize);
+    uint8_t* ptr = buffer.data();
+    
+    // Copy header
+    memcpy(ptr, &header, sizeof(CsiPacketHeader));
+    ptr += sizeof(CsiPacketHeader);
+    
+    // Copy CSI data
+    for (const auto& packet : data) {
+        for (double value : packet) {
+            CsiSample sample;
+            sample.value = value;
+            memcpy(ptr, &sample, sizeof(CsiSample));
+            ptr += sizeof(CsiSample);
+        }
+    }
+
+    // Send to all registered clients
+    for (const auto& client : clients) {
+        struct sockaddr_in clientAddr;
+        memset(&clientAddr, 0, sizeof(clientAddr));
+        clientAddr.sin_family = AF_INET;
+        clientAddr.sin_port = htons(client.second);
+        
+        if (inet_pton(AF_INET, client.first.c_str(), &clientAddr.sin_addr) <= 0) {
+            std::cerr << "Invalid client IP address: " << client.first << std::endl;
+            continue;
+        }
+
+        ssize_t sent = sendto(udpSocket, buffer.data(), buffer.size(), 0,
+                             (struct sockaddr*)&clientAddr, sizeof(clientAddr));
+        
+        if (sent < 0) {
+            std::cerr << "Failed to send UDP data to " << client.first << ":" 
+                      << client.second << " - " << strerror(errno) << std::endl;
+        } else {
+            std::cout << "Sent " << sent << " bytes to " << client.first << ":" 
+                      << client.second << " (antenna " << antennaIdx 
+                      << ", " << data.size() << " packets, " << totalSamples << " samples)" << std::endl;
+        }
+    }
 }

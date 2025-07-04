@@ -9,7 +9,6 @@ set(CMAKE_CXX_COMPILER /home/daniel/openwrt-sdk_24-10-01/openwrt-sdk-24.10.1-med
 
 set(SOURCES
   parsers/parser_mt76.cpp
-  estimators/kurtosis_motion_estimator.cpp
   wifi_drv_api/mt76_api.cpp
   motion_detector.cpp
   md.cpp
