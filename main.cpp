@@ -42,7 +42,7 @@ int main(int argc, char **argv)
     }
 
     // Example: Add a client (you can modify this or add clients dynamically)
-    md.addUdpClient("192.168.178.53", 8888);
+    md.addUdpClient("192.168.178.96", 8888);
 
     md.startMonitoring(argv[1], std::stoul(argv[2]));
 

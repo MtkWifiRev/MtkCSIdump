@@ -190,7 +190,7 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
     def create_axis_control_panel(self):
         """Create a control panel for axis settings"""
         panel = QtWidgets.QGroupBox("Axis Controls")
-        panel.setMaximumHeight(150)
+        panel.setMaximumHeight(180)
         
         layout = QtWidgets.QVBoxLayout()
         
@@ -224,6 +224,25 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         x_layout.addWidget(self.x_max_spinbox)
         
         x_layout.addStretch()
+        
+        # Preset buttons for X-axis
+        x_preset_layout = QtWidgets.QHBoxLayout()
+        x_preset_layout.addWidget(QtWidgets.QLabel("X-axis presets:"))
+        
+        # Subcarrier presets
+        sc_20_btn = QtWidgets.QPushButton("20MHz (0-64)")
+        sc_20_btn.clicked.connect(lambda: self.set_x_preset(0, 64))
+        x_preset_layout.addWidget(sc_20_btn)
+        
+        sc_40_btn = QtWidgets.QPushButton("40MHz (0-128)")
+        sc_40_btn.clicked.connect(lambda: self.set_x_preset(0, 128))
+        x_preset_layout.addWidget(sc_40_btn)
+        
+        sc_80_btn = QtWidgets.QPushButton("80MHz (0-256)")
+        sc_80_btn.clicked.connect(lambda: self.set_x_preset(0, 256))
+        x_preset_layout.addWidget(sc_80_btn)
+        
+        x_preset_layout.addStretch()
         
         # Y-axis controls
         y_layout = QtWidgets.QHBoxLayout()
@@ -290,6 +309,7 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         
         # Add all layouts to main layout
         layout.addLayout(x_layout)
+        layout.addLayout(x_preset_layout)
         layout.addLayout(y_layout)
         layout.addLayout(preset_layout)
         layout.addLayout(apply_layout)
@@ -332,6 +352,13 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
     def update_apply_button_state(self):
         """Update the apply button enabled state"""
         self.apply_axis_button.setEnabled(not self.auto_scale_x or not self.auto_scale_y)
+    
+    def set_x_preset(self, min_val, max_val):
+        """Set X-axis preset values"""
+        self.x_min_spinbox.setValue(min_val)
+        self.x_max_spinbox.setValue(max_val)
+        if not self.auto_scale_x:
+            self.apply_axis_settings()
     
     def set_y_preset(self, min_val, max_val):
         """Set Y-axis preset values"""
@@ -488,7 +515,17 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
             # Get total packets received
             total_packets = sum(self.packet_counts.values()) if self.packet_counts else 0
             
-            info_text = f"Active Antennas: {active_antennas} | Total Packets: {total_packets} | FPS: {self.fps:.1f}"
+            # Get sample count info from the most recent data
+            sample_info = ""
+            if self.csi_data_history:
+                for antenna_idx, history in self.csi_data_history.items():
+                    if history:
+                        latest_data = history[-1]
+                        sample_count = len(latest_data.samples)
+                        sample_info = f" | Samples per packet: {sample_count}"
+                        break
+            
+            info_text = f"Active Antennas: {active_antennas} | Total Packets: {total_packets} | FPS: {self.fps:.1f}{sample_info}"
             
             # Check if widgets still exist before updating
             if hasattr(self, 'info_label') and self.info_label is not None:

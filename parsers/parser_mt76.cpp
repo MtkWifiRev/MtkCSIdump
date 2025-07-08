@@ -17,43 +17,47 @@ std::vector<std::vector<double>> ParserMT76::processRawData(void *data, int antI
 
     for (int it = 0; it < list->size(); it++)
     {
-        int recv_i_q_num = 0;
-
+        int num_subcarriers = CSI_BW20_DATA_COUNT; // Default value
+        
         csi_data *csi = list->at(it);
         if (csi)
         {
-            fprintf(stderr, "\tprocessRawData() csi->data_num: %d\n", csi->data_num);
-            //for (size_t i = 0, j = 0; i < csi->data_num; i++)
-            for (size_t i = 0, j = 0; i < CSI_MAX_COUNT; i++)
+            //fprintf(stderr, "\tprocessRawData() csi->data_num: %d\n", csi->data_num);
+            
+            // Determine number of subcarriers based on bandwidth
+            switch (csi->ch_bw) {
+                case 0: num_subcarriers = CSI_BW20_DATA_COUNT; break;   // 20MHz
+                case 1: num_subcarriers = CSI_BW40_DATA_COUNT; break;   // 40MHz
+                case 2: num_subcarriers = CSI_BW80_DATA_COUNT; break;   // 80MHz
+                case 3: num_subcarriers = CSI_BW160_DATA_COUNT; break;  // 160MHz
+                default: num_subcarriers = CSI_BW20_DATA_COUNT; break;  // Default to 20MHz
+            }
+            
+            //fprintf(stderr, "\tprocessRawData() ch_bw: %d, num_subcarriers: %d\n", csi->ch_bw, num_subcarriers);
+            
+            // Process all subcarriers for this bandwidth
+            for (size_t i = 0; i < num_subcarriers; i++)
             {
-                if(csi->data_q[i] != 0 && csi->data_i[i] != 0) {
-                    csi_per_antenna[csi->rx_idx][j++] = std::complex<double>(csi->data_q[i], csi->data_i[i]);
-                    fprintf(stderr, "\tprocessRawData() csi_data[%d]->i: 0x%x, csi_data[%d]->q: 0x%x\n", i, csi->data_i[i], i, csi->data_q[i]);
-                    recv_i_q_num++;
-                }
+                std::complex<double> csi_complex(csi->data_i[i], csi->data_q[i]);
+                csi_per_antenna[csi->rx_idx][i] = csi_complex;
+                //fprintf(stderr, "\tprocessRawData() csi_data[%d]->i: 0x%x, csi_data[%d]->q: 0x%x\n", i, csi->data_i[i], i, csi->data_q[i]);
             }
 
             if (csi->rx_idx == antIdx)
             {
-                for (int i = 0; i < csi_per_antenna[antIdx].size(); i++) {
+                for (int i = 0; i < num_subcarriers; i++) {
                     csi_antenna_real[i] = std::abs(csi_per_antenna[antIdx][i]);
                 }
 
-                //if (tones_per_packet[antIdx].size() == 5)
-                //    tones_per_packet[antIdx].clear();
-
-                //std::vector<double> arr(csi_antenna_real.begin(), csi_antenna_real.begin() + csi->data_num);
-                std::vector<double> arr(csi_antenna_real.begin(), csi_antenna_real.begin() + recv_i_q_num);
+                std::vector<double> arr(csi_antenna_real.begin(), csi_antenna_real.begin() + num_subcarriers);
 
                 tones_per_packet[antIdx].push_back(arr);
             }
+            
+            //fprintf(stderr, "\tprocessRawData() processed %d subcarriers\n", num_subcarriers);
         }
-        fprintf(stderr, "\tprocessRawData() got %d non-zero I/Q\n", recv_i_q_num);
     }
 
 
-    //if (tones_per_packet[antIdx].size() == 5)
     return tones_per_packet[antIdx];
-
-    //return {};
 }

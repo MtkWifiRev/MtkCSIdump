@@ -42,19 +42,25 @@ void MotionDetector::runMonitoring()
             if (list) {
                 std::vector<std::vector<double>> parsed_data = parser.processRawData(list, i);
                 if (parsed_data.size()) {
-                    fprintf(stderr, "!!!!!!!!!!! found data: %d !!!!!!!!!!!!!!!\n", parsed_data.size());
+                    //fprintf(stderr, "!!!!!!!!!!! found data: %d !!!!!!!!!!!!!!!\n", parsed_data.size());
                     for (int j = 0; j < parsed_data.size(); j++) {
-                        fprintf(stderr, "!!!!!!!!!!! found packets inside data: #[%d] %d !!!!!!!!!!!!!!!\n", j, parsed_data[j].size());
+                        //fprintf(stderr, "!!!!!!!!!!! found packets inside data: #[%d] %d !!!!!!!!!!!!!!!\n", j, parsed_data[j].size());
                     }
                     // Send CSI data via UDP if server is running
                     if (udpServerRunning) {
-                        sendCsiDataUdp(parsed_data, i);
+                        // Send each packet separately instead of concatenating
+                        for (const auto& packet : parsed_data) {
+                            if (!packet.empty()) {
+                                std::vector<std::vector<double>> singlePacket = { packet };
+                                sendCsiDataUdp(singlePacket, i);
+                            }
+                        }
                     }
                 } else {
-                    fprintf(stderr, "Dump List Empty!\n");
+                    //fprintf(stderr, "Dump List Empty!\n");
                 }
             } else {
-                fprintf(stderr, "Dump List NULL!\n");
+                //fprintf(stderr, "Dump List NULL!\n");
             }
         }
 
