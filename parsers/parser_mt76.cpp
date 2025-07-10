@@ -45,13 +45,30 @@ std::vector<std::vector<double>> ParserMT76::processRawData(void *data, int antI
 
             if (csi->rx_idx == antIdx)
             {
-                for (int i = 0; i < num_subcarriers; i++) {
-                    csi_antenna_real[i] = std::abs(csi_per_antenna[antIdx][i]);
+                // Skip first few subcarriers to avoid DC offset issues
+                int start_idx = (num_subcarriers >= 64) ? 2 : 1;
+                int end_idx = num_subcarriers - 1; // Also skip last subcarrier
+                
+                // Calculate amplitudes and find max for normalization
+                std::vector<double> amplitudes;
+                double max_amplitude = 0.0;
+                
+                for (int i = start_idx; i < end_idx; i++) {
+                    double amplitude = std::abs(csi_per_antenna[antIdx][i]);
+                    amplitudes.push_back(amplitude);
+                    if (amplitude > max_amplitude) {
+                        max_amplitude = amplitude;
+                    }
                 }
-
-                std::vector<double> arr(csi_antenna_real.begin(), csi_antenna_real.begin() + num_subcarriers);
-
-                tones_per_packet[antIdx].push_back(arr);
+                
+                // Normalize amplitudes to enhance sensitivity
+                if (max_amplitude > 0.0) {
+                    for (size_t i = 0; i < amplitudes.size(); i++) {
+                        amplitudes[i] = (amplitudes[i] / max_amplitude) * 100.0; // Scale to 0-100
+                    }
+                }
+                
+                tones_per_packet[antIdx].push_back(amplitudes);
             }
             
             //fprintf(stderr, "\tprocessRawData() processed %d subcarriers\n", num_subcarriers);

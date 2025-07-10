@@ -160,6 +160,11 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         self.fixed_y_min = -50
         self.fixed_y_max = 50
         
+        # Initialize processing options
+        self.show_raw_amplitude = True
+        self.show_amplitude_diff = False
+        self.baseline_data = {}  # Store baseline for difference calculation
+        
         # Initialize plots dictionary
         self.plots = {}
         self.plot_lines = {}
@@ -190,7 +195,7 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
     def create_axis_control_panel(self):
         """Create a control panel for axis settings"""
         panel = QtWidgets.QGroupBox("Axis Controls")
-        panel.setMaximumHeight(180)
+        panel.setMaximumHeight(210)
         
         layout = QtWidgets.QVBoxLayout()
         
@@ -296,6 +301,11 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         phase_preset_btn.clicked.connect(lambda: self.set_y_preset(-3.14159, 3.14159))
         preset_layout.addWidget(phase_preset_btn)
         
+        # Difference preset
+        diff_preset_btn = QtWidgets.QPushButton("Difference (-20-20)")
+        diff_preset_btn.clicked.connect(lambda: self.set_y_preset(-20, 20))
+        preset_layout.addWidget(diff_preset_btn)
+        
         preset_layout.addStretch()
         
         # Apply button
@@ -307,12 +317,33 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         apply_layout.addWidget(self.apply_axis_button)
         apply_layout.addStretch()
         
+        # Processing options
+        processing_layout = QtWidgets.QHBoxLayout()
+        processing_layout.addWidget(QtWidgets.QLabel("Processing:"))
+        
+        self.raw_amplitude_radio = QtWidgets.QRadioButton("Raw Amplitude")
+        self.raw_amplitude_radio.setChecked(True)
+        self.raw_amplitude_radio.toggled.connect(self.on_processing_changed)
+        processing_layout.addWidget(self.raw_amplitude_radio)
+        
+        self.amplitude_diff_radio = QtWidgets.QRadioButton("Amplitude Difference")
+        self.amplitude_diff_radio.toggled.connect(self.on_processing_changed)
+        processing_layout.addWidget(self.amplitude_diff_radio)
+        
+        self.set_baseline_btn = QtWidgets.QPushButton("Set Baseline")
+        self.set_baseline_btn.clicked.connect(self.set_baseline)
+        self.set_baseline_btn.setEnabled(False)
+        processing_layout.addWidget(self.set_baseline_btn)
+        
+        processing_layout.addStretch()
+        
         # Add all layouts to main layout
         layout.addLayout(x_layout)
         layout.addLayout(x_preset_layout)
         layout.addLayout(y_layout)
         layout.addLayout(preset_layout)
         layout.addLayout(apply_layout)
+        layout.addLayout(processing_layout)
         
         panel.setLayout(layout)
         return panel
@@ -366,6 +397,29 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         self.y_max_spinbox.setValue(max_val)
         if not self.auto_scale_y:
             self.apply_axis_settings()
+    
+    def on_processing_changed(self):
+        """Handle processing mode change"""
+        self.show_raw_amplitude = self.raw_amplitude_radio.isChecked()
+        self.show_amplitude_diff = self.amplitude_diff_radio.isChecked()
+        self.set_baseline_btn.setEnabled(self.show_amplitude_diff)
+        
+        # Update Y-axis presets based on processing mode
+        if self.show_amplitude_diff:
+            # Set suitable range for difference plots
+            self.set_y_preset(-20, 20)
+        else:
+            # Set suitable range for raw amplitude
+            self.set_y_preset(0, 100)
+    
+    def set_baseline(self):
+        """Set current CSI data as baseline for difference calculation"""
+        self.baseline_data.clear()
+        for antenna_idx, history in self.csi_data_history.items():
+            if history:
+                latest_data = history[-1]
+                self.baseline_data[antenna_idx] = np.array(latest_data.samples.copy())
+        print(f"Baseline set for {len(self.baseline_data)} antennas")
     
     def apply_axis_settings(self):
         """Apply axis settings to all plots"""
@@ -469,9 +523,27 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
             
         samples = np.array(csi_data.samples)
         
+        # Process data based on selected mode
+        if self.show_amplitude_diff and antenna_idx in self.baseline_data:
+            # Show difference from baseline
+            baseline = self.baseline_data[antenna_idx]
+            if len(baseline) == len(samples):
+                processed_samples = samples - baseline
+                plot_title_suffix = " (Difference from Baseline)"
+            else:
+                processed_samples = samples
+                plot_title_suffix = " (Raw - Baseline size mismatch)"
+        else:
+            # Show raw amplitude
+            processed_samples = samples
+            plot_title_suffix = " (Raw Amplitude)"
+        
         # Update raw CSI samples plot
-        x_data = np.arange(len(samples))
-        self.plot_lines[antenna_idx].setData(x_data, samples)
+        x_data = np.arange(len(processed_samples))
+        self.plot_lines[antenna_idx].setData(x_data, processed_samples)
+        
+        # Update plot title to reflect processing mode
+        self.plots[antenna_idx].setTitle(f"CSI Samples - Antenna {antenna_idx}{plot_title_suffix}")
         
         # Apply axis settings for raw samples plot
         if not self.auto_scale_x:
@@ -479,7 +551,7 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         if not self.auto_scale_y:
             self.plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
         
-        # Compute and update magnitude spectrum (FFT)
+        # Compute and update magnitude spectrum (FFT) - always use raw samples for FFT
         if len(samples) > 1:
             # Compute FFT
             fft_data = np.fft.fft(samples)
@@ -499,8 +571,13 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
                 self.magnitude_plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
                 self.phase_plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
             if not self.auto_scale_y:
-                self.magnitude_plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
-                self.phase_plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
+                # Use different Y ranges for magnitude and phase plots
+                if self.show_amplitude_diff:
+                    # For difference mode, use wider range for magnitude plot
+                    self.magnitude_plots[antenna_idx].setYRange(-100, 100)
+                else:
+                    self.magnitude_plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
+                self.phase_plots[antenna_idx].setYRange(-3.15, 3.15)  # Phase always -π to π
         
     def update_info_panel(self):
         """Update the information panel"""
