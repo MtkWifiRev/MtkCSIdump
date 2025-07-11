@@ -9,10 +9,12 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <vector>
-#include <cstdint>
+#include <mutex>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include "wifi_drv_api/mt76_api.h"
 
-// Simple structs for UDP data transmission
 struct CsiPacketHeader {
     uint64_t timestamp;
     uint32_t antenna_idx;
@@ -39,36 +41,34 @@ public:
     unsigned getAntennaIdx();
     double getMotion();
     bool getIsMonitoring();
-    
-    // UDP server methods
     int startUdpServer(int port);
     int stopUdpServer();
     void addUdpClient(const std::string& clientIp, int clientPort);
     void removeUdpClient(const std::string& clientIp, int clientPort);
 
 private:
+    void runMonitoring();
+    void udpServerListen();
+    void sendCsiDataUdp(const std::vector<std::vector<double>>& data, int antennaIdx);
+
+    static MotionDetector* instance;
+    MotionDetector() : isMonitoring(false), stopFlag(false), antMonIdx(0), motion_result(0.0),
+                       interval(0), udpServerRunning(false), udpSocket(-1) {}
+
     std::string ifname;
     unsigned interval;
     unsigned antMonIdx;
+    std::atomic<bool> stopFlag;
+    std::chrono::time_point<std::chrono::steady_clock> startMon;
+    MT76API wifi;
 
     double motion_result;
     bool isMonitoring;
     std::thread monitorWorker;
+    std::thread udpServerWorker;
     std::mutex dataMutex;
-    std::atomic<bool> stopFlag;
-    std::chrono::time_point<std::chrono::steady_clock> startMon;
-
-    MT76API wifi;
-    
-    // UDP server variables
+    std::mutex udpMutex;
+    std::vector<std::pair<std::string, int>> udpClients;
     int udpSocket;
     bool udpServerRunning;
-    std::vector<std::pair<std::string, int>> udpClients;
-    std::mutex udpMutex;
-
-    MotionDetector() : udpSocket(-1), udpServerRunning(false) {}
-    static MotionDetector* instance;
-
-    void runMonitoring();
-    void sendCsiDataUdp(const std::vector<std::vector<double>>& data, int antennaIdx);
 };

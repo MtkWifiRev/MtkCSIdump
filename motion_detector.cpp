@@ -6,6 +6,7 @@
 #include <thread>
 #include <cstring>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 MotionDetector* MotionDetector::instance = nullptr;
 
@@ -65,6 +66,26 @@ void MotionDetector::runMonitoring()
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(interval));
+    }
+}
+
+void MotionDetector::udpServerListen()
+{
+    char buffer[1024];
+    struct sockaddr_in clientAddr;
+    socklen_t clientAddrLen = sizeof(clientAddr);
+
+    while (udpServerRunning) {
+        ssize_t recvLen = recvfrom(udpSocket, buffer, sizeof(buffer) - 1, 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
+        if (recvLen > 0) {
+            buffer[recvLen] = '\0';
+            if (strcmp(buffer, "register") == 0) {
+                char clientIp[INET_ADDRSTRLEN];
+                inet_ntop(AF_INET, &clientAddr.sin_addr, clientIp, INET_ADDRSTRLEN);
+                int clientPort = ntohs(clientAddr.sin_port);
+                addUdpClient(clientIp, clientPort);
+            }
+        }
     }
 }
 
@@ -170,7 +191,21 @@ int MotionDetector::startUdpServer(int port)
         return -1;
     }
 
+    // Bind socket
+    struct sockaddr_in serverAddr;
+    memset(&serverAddr, 0, sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(port);
+
+    if (bind(udpSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        std::cerr << "Failed to bind UDP socket: " << strerror(errno) << std::endl;
+        close(udpSocket);
+        return -1;
+    }
+
     udpServerRunning = true;
+    udpServerWorker = std::thread(&MotionDetector::udpServerListen, this);
     std::cout << "UDP server started successfully on port " << port << std::endl;
     return 0;
 }
@@ -183,6 +218,13 @@ int MotionDetector::stopUdpServer()
 
     udpServerRunning = false;
     
+    // Unblock recvfrom
+    shutdown(udpSocket, SHUT_RDWR);
+
+    if (udpServerWorker.joinable()) {
+        udpServerWorker.join();
+    }
+
     if (udpSocket >= 0) {
         close(udpSocket);
         udpSocket = -1;
@@ -199,10 +241,13 @@ int MotionDetector::stopUdpServer()
 void MotionDetector::addUdpClient(const std::string& clientIp, int clientPort)
 {
     udpMutex.lock();
-    udpClients.push_back(std::make_pair(clientIp, clientPort));
+    // Check if client already exists
+    auto it = std::find(udpClients.begin(), udpClients.end(), std::make_pair(clientIp, clientPort));
+    if (it == udpClients.end()) {
+        udpClients.push_back(std::make_pair(clientIp, clientPort));
+        std::cout << "Added UDP client: " << clientIp << ":" << clientPort << std::endl;
+    }
     udpMutex.unlock();
-    
-    std::cout << "Added UDP client: " << clientIp << ":" << clientPort << std::endl;
 }
 
 void MotionDetector::removeUdpClient(const std::string& clientIp, int clientPort)
@@ -257,23 +302,19 @@ void MotionDetector::sendCsiDataUdp(const std::vector<std::vector<double>>& data
     
     // Copy CSI data
     for (const auto& packet : data) {
-        for (double value : packet) {
-            CsiSample sample;
-            sample.value = value;
-            memcpy(ptr, &sample, sizeof(CsiSample));
-            ptr += sizeof(CsiSample);
-        }
+        memcpy(ptr, packet.data(), packet.size() * sizeof(double));
+        ptr += packet.size() * sizeof(double);
     }
 
-    // Send to all registered clients
+    // Send to each UDP client
     for (const auto& client : clients) {
         struct sockaddr_in clientAddr;
         memset(&clientAddr, 0, sizeof(clientAddr));
         clientAddr.sin_family = AF_INET;
         clientAddr.sin_port = htons(client.second);
-        
+
+        // Convert IP address
         if (inet_pton(AF_INET, client.first.c_str(), &clientAddr.sin_addr) <= 0) {
-            std::cerr << "Invalid client IP address: " << client.first << std::endl;
             continue;
         }
 
@@ -281,12 +322,7 @@ void MotionDetector::sendCsiDataUdp(const std::vector<std::vector<double>>& data
                              (struct sockaddr*)&clientAddr, sizeof(clientAddr));
         
         if (sent < 0) {
-            std::cerr << "Failed to send UDP data to " << client.first << ":" 
-                      << client.second << " - " << strerror(errno) << std::endl;
-        } else {
-            std::cout << "Sent " << sent << " bytes to " << client.first << ":" 
-                      << client.second << " (antenna " << antennaIdx 
-                      << ", " << data.size() << " packets, " << totalSamples << " samples)" << std::endl;
+            std::cerr << "Failed to send UDP data to " << client.first << ":" << client.second << ": " << strerror(errno) << std::endl;
         }
     }
 }

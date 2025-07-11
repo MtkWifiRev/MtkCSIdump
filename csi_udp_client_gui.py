@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
+import sys
 import socket
 import struct
-import sys
 import time
 import threading
 import signal
@@ -33,9 +33,10 @@ class CSIData:
 class CSIReceiver(QtCore.QObject):
     data_received = QtCore.pyqtSignal(object)
     
-    def __init__(self, port):
+    def __init__(self, server_ip, server_port):
         super().__init__()
-        self.port = port
+        self.server_ip = server_ip
+        self.server_port = server_port
         self.socket = None
         self.running = False
         
@@ -44,10 +45,11 @@ class CSIReceiver(QtCore.QObject):
         self.socket.settimeout(1.0)  # 1 second timeout
         
         try:
-            self.socket.bind(('0.0.0.0', self.port))
+            # Register with the server
+            self.socket.sendto(b'register', (self.server_ip, self.server_port))
+            print(f"Registered with server at {self.server_ip}:{self.server_port}")
+
             self.running = True
-            print(f"UDP receiver started on port {self.port}")
-            
             while self.running:
                 try:
                     data, addr = self.socket.recvfrom(65536)
@@ -86,27 +88,25 @@ class CSIReceiver(QtCore.QObject):
                         print(f"Error receiving data: {e}")
                         
         except Exception as e:
-            if self.running:
-                print(f"Error starting receiver: {e}")
+            print(f"Error in receiver: {e}")
         finally:
-            self.cleanup()
+            if self.socket:
+                self.socket.close()
+            print("Receiver stopped.")
     
     def stop_receiving(self):
         self.running = False
     
     def cleanup(self):
         """Clean up socket resources"""
-        try:
-            if self.socket:
-                self.socket.close()
-                self.socket = None
-        except Exception as e:
-            print(f"Error cleaning up socket: {e}")
+        pass
+            
 
 class CSIVisualizerWindow(QtWidgets.QMainWindow):
-    def __init__(self, port):
+    def __init__(self, server_ip, server_port):
         super().__init__()
-        self.port = port
+        self.server_ip = server_ip
+        self.server_port = server_port
         self.csi_data_history = {}  # Store history per antenna
         self.max_history_length = 100
         self.packet_counts = {}
@@ -117,7 +117,7 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         self.setupReceiver()
         
     def setupUI(self):
-        self.setWindowTitle(f"CSI Visualizer - Port {self.port}")
+        self.setWindowTitle(f"CSI Visualizer - Connected to {self.server_ip}:{self.server_port}")
         self.setGeometry(100, 100, 1600, 900)
         
         # Create central widget and layout
@@ -181,7 +181,7 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
     def setupReceiver(self):
         # Create receiver thread
         self.receiver_thread = QtCore.QThread()
-        self.receiver = CSIReceiver(self.port)
+        self.receiver = CSIReceiver(self.server_ip, self.server_port)
         self.receiver.moveToThread(self.receiver_thread)
         
         # Connect signals
@@ -609,7 +609,7 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
                 self.info_label.setText(info_text)
             
             # Update window title
-            self.setWindowTitle(f"CSI Visualizer - Port {self.port} | FPS: {self.fps:.1f}")
+            self.setWindowTitle(f"CSI Visualizer - Port {self.server_port} | FPS: {self.fps:.1f}")
         except Exception as e:
             # Silently ignore errors during shutdown
             pass
@@ -653,12 +653,12 @@ def signal_handler(signum, frame):
     QtWidgets.QApplication.quit()
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python3 csi_udp_client_gui.py <port>")
-        print("Example: python3 csi_udp_client_gui.py 8888")
+    if len(sys.argv) != 3:
+        print("Usage: ./csi_udp_client_gui.py <server_ip> <server_port>")
         sys.exit(1)
     
-    port = int(sys.argv[1])
+    server_ip = sys.argv[1]
+    server_port = int(sys.argv[2])
     
     # Set up signal handler for Ctrl+C
     signal.signal(signal.SIGINT, signal_handler)
@@ -669,12 +669,10 @@ def main():
     app.setStyle('Fusion')
     
     # Create and show main window
-    window = CSIVisualizerWindow(port)
+    window = CSIVisualizerWindow(server_ip, server_port)
     window.show()
     
-    print(f"CSI Visualizer started on port {port}")
-    print(f"Make sure to add this client to the server with:")
-    print(f"motion-detector: addUdpClient 127.0.0.1 {port}")
+    print(f"CSI Visualizer started, connecting to {server_ip}:{server_port}")
     print("Press Ctrl+C to exit")
     
     # Enable timer to process events during signal handling
