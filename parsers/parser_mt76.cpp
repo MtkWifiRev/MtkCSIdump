@@ -12,8 +12,7 @@ std::vector<std::vector<double>> ParserMT76::processRawData(void *data, int antI
     std::vector<std::vector<std::complex<double>>> csi_per_antenna(ANTENNA_NUM, std::vector<std::complex<double>>(CSI_BW160_DATA_COUNT));
     std::vector<double> csi_antenna_real(std::vector<double>(CSI_BW160_DATA_COUNT));
     std::vector<csi_data *> *list = (std::vector<csi_data *>*)data;
-    //static std::vector<std::vector<double>> tones_per_packet[3];
-    std::vector<std::vector<double>> tones_per_packet[3];
+    std::vector<std::vector<double>> tones_per_packet[ANTENNA_NUM];
 
     for (int it = 0; it < list->size(); it++)
     {
