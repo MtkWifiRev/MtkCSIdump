@@ -14,7 +14,7 @@ import pyqtgraph as pg
 
 # Struct format for CsiPacketHeader
 # uint64_t timestamp, uint32_t antenna_idx, uint32_t packet_count, uint32_t total_samples
-HEADER_FORMAT = '<QLLL'  # Little endian: Q=uint64, L=uint32
+HEADER_FORMAT = '<QIII'  # Little endian: Q=uint64, I=uint32
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
 # Struct format for CsiSample
@@ -63,12 +63,11 @@ class CSIReceiver(QtCore.QObject):
                     
                     # Parse CSI samples
                     samples_data = data[HEADER_SIZE:]
-                    samples = []
+                    num_samples = len(samples_data) // SAMPLE_SIZE
                     
-                    for i in range(min(total_samples, len(samples_data) // SAMPLE_SIZE)):
-                        sample_bytes = samples_data[i * SAMPLE_SIZE:(i + 1) * SAMPLE_SIZE]
-                        sample_value = struct.unpack(SAMPLE_FORMAT, sample_bytes)[0]
-                        samples.append(sample_value)
+                    samples = []
+                    if num_samples > 0:
+                        samples = list(struct.unpack(f'<{num_samples}d', samples_data))
                     
                     # Create CSI data object
                     csi_data = CSIData()
@@ -85,10 +84,10 @@ class CSIReceiver(QtCore.QObject):
                     continue
                 except Exception as e:
                     if self.running:
-                        print(f"Error receiving data: {e}")
+                        print(f"Error receiving data: {e}", file=sys.stderr)
                         
         except Exception as e:
-            print(f"Error in receiver: {e}")
+            print(f"Error in receiver: {e}", file=sys.stderr)
         finally:
             if self.socket:
                 self.socket.close()
