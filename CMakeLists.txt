@@ -25,5 +25,10 @@ find_library(LIBNL_TINY nl-tiny PATHS ${LIBNL_TINY_PATH})
 include_directories(/data/mediatek/leaks/meta-gl-motion-detection/recipes-ccsp/hal/files/libnl-tiny_bin/usr/local/include/libnl-tiny/)
 
 add_compile_options(-Wall -Wextra)
+
+# Static linking configuration
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+
 find_package(Threads REQUIRED)
-target_link_libraries(CSIdump PRIVATE Threads::Threads ${LIBNL_TINY})
+target_link_libraries(CSIdump PRIVATE Threads::Threads ${LIBNL_TINY} -lgcc_eh -lgcc -static-libgcc -static-libstdc++)
