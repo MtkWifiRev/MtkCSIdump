@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1)
-project(motion-detector)
+project(CSIdump)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -16,8 +16,8 @@ set(SOURCES
 
 include_directories(${CMAKE_SOURCE_DIR})
 
-add_executable(motion-detector ${SOURCES} main.cpp)
-add_library(motiondetector STATIC ${SOURCES})
+add_executable(CSIdump ${SOURCES} main.cpp)
+#add_library(motiondetector STATIC ${SOURCES})
 
 set(LIBNL_TINY_PATH /data/mediatek/leaks/meta-gl-motion-detection/recipes-ccsp/hal/files/libnl-tiny_bin/usr/local/lib/)
 
@@ -27,7 +27,7 @@ include_directories(/data/mediatek/leaks/meta-gl-motion-detection/recipes-ccsp/h
 
 add_compile_options(-Wall -Wextra)
 find_package(Threads REQUIRED)
-target_link_libraries(motion-detector PRIVATE Threads::Threads ${LIBNL_TINY})
+target_link_libraries(CSIdump PRIVATE Threads::Threads ${LIBNL_TINY})
 
-set(CMAKE_INSTALL_PREFIX /usr)
-install(TARGETS motion-detector RUNTIME DESTINATION z)
+#set(CMAKE_INSTALL_PREFIX /usr)
+#install(TARGETS motion-detector RUNTIME DESTINATION z)
