@@ -155,14 +155,6 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         # Configure plot widget
         self.plot_widget.setBackground('w')
         
-        # Initialize axis settings
-        self.auto_scale_x = True
-        self.fixed_x_min = 0
-        self.fixed_x_max = 100
-        self.auto_scale_y = True
-        self.fixed_y_min = -50
-        self.fixed_y_max = 50
-        
         # Initialize processing options
         self.show_raw_amplitude = True
         self.show_amplitude_diff = False
@@ -196,133 +188,11 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         self.receiver_thread.start()
         
     def create_axis_control_panel(self):
-        """Create a control panel for axis settings"""
-        panel = QtWidgets.QGroupBox("Axis Controls")
-        panel.setMaximumHeight(210)
+        """Create a control panel for processing options"""
+        panel = QtWidgets.QGroupBox("Processing Controls")
+        panel.setMaximumHeight(80)
         
         layout = QtWidgets.QVBoxLayout()
-        
-        # X-axis controls
-        x_layout = QtWidgets.QHBoxLayout()
-        
-        # Auto-scale X checkbox
-        self.auto_scale_x_checkbox = QtWidgets.QCheckBox("Auto-scale X-axis")
-        self.auto_scale_x_checkbox.setChecked(True)
-        self.auto_scale_x_checkbox.stateChanged.connect(self.on_auto_scale_x_changed)
-        x_layout.addWidget(self.auto_scale_x_checkbox)
-        
-        x_layout.addWidget(QtWidgets.QLabel("X-axis range:"))
-        
-        # X-axis min control
-        x_layout.addWidget(QtWidgets.QLabel("Min:"))
-        self.x_min_spinbox = QtWidgets.QSpinBox()
-        self.x_min_spinbox.setRange(-10000, 10000)
-        self.x_min_spinbox.setValue(0)
-        self.x_min_spinbox.setEnabled(False)
-        self.x_min_spinbox.valueChanged.connect(self.on_x_axis_range_changed)
-        x_layout.addWidget(self.x_min_spinbox)
-        
-        # X-axis max control
-        x_layout.addWidget(QtWidgets.QLabel("Max:"))
-        self.x_max_spinbox = QtWidgets.QSpinBox()
-        self.x_max_spinbox.setRange(-10000, 10000)
-        self.x_max_spinbox.setValue(100)
-        self.x_max_spinbox.setEnabled(False)
-        self.x_max_spinbox.valueChanged.connect(self.on_x_axis_range_changed)
-        x_layout.addWidget(self.x_max_spinbox)
-        
-        x_layout.addStretch()
-        
-        # Preset buttons for X-axis
-        x_preset_layout = QtWidgets.QHBoxLayout()
-        x_preset_layout.addWidget(QtWidgets.QLabel("X-axis presets:"))
-        
-        # Subcarrier presets
-        sc_20_btn = QtWidgets.QPushButton("20MHz (0-64)")
-        sc_20_btn.clicked.connect(lambda: self.set_x_preset(0, 64))
-        x_preset_layout.addWidget(sc_20_btn)
-        
-        sc_40_btn = QtWidgets.QPushButton("40MHz (0-128)")
-        sc_40_btn.clicked.connect(lambda: self.set_x_preset(0, 128))
-        x_preset_layout.addWidget(sc_40_btn)
-        
-        sc_80_btn = QtWidgets.QPushButton("80MHz (0-256)")
-        sc_80_btn.clicked.connect(lambda: self.set_x_preset(0, 256))
-        x_preset_layout.addWidget(sc_80_btn)
-        
-        sc_160_btn = QtWidgets.QPushButton("160MHz (0-512)")
-        sc_160_btn.clicked.connect(lambda: self.set_x_preset(0, 512))
-        x_preset_layout.addWidget(sc_160_btn)
-        
-        x_preset_layout.addStretch()
-        
-        # Y-axis controls
-        y_layout = QtWidgets.QHBoxLayout()
-        
-        # Auto-scale Y checkbox
-        self.auto_scale_y_checkbox = QtWidgets.QCheckBox("Auto-scale Y-axis")
-        self.auto_scale_y_checkbox.setChecked(True)
-        self.auto_scale_y_checkbox.stateChanged.connect(self.on_auto_scale_y_changed)
-        y_layout.addWidget(self.auto_scale_y_checkbox)
-        
-        y_layout.addWidget(QtWidgets.QLabel("Y-axis range:"))
-        
-        # Y-axis min control
-        y_layout.addWidget(QtWidgets.QLabel("Min:"))
-        self.y_min_spinbox = QtWidgets.QDoubleSpinBox()
-        self.y_min_spinbox.setRange(-10000.0, 10000.0)
-        self.y_min_spinbox.setValue(-50.0)
-        self.y_min_spinbox.setDecimals(2)
-        self.y_min_spinbox.setEnabled(False)
-        self.y_min_spinbox.valueChanged.connect(self.on_y_axis_range_changed)
-        y_layout.addWidget(self.y_min_spinbox)
-        
-        # Y-axis max control
-        y_layout.addWidget(QtWidgets.QLabel("Max:"))
-        self.y_max_spinbox = QtWidgets.QDoubleSpinBox()
-        self.y_max_spinbox.setRange(-10000.0, 10000.0)
-        self.y_max_spinbox.setValue(50.0)
-        self.y_max_spinbox.setDecimals(2)
-        self.y_max_spinbox.setEnabled(False)
-        self.y_max_spinbox.valueChanged.connect(self.on_y_axis_range_changed)
-        y_layout.addWidget(self.y_max_spinbox)
-        
-        y_layout.addStretch()
-        
-        # Preset buttons for Y-axis
-        preset_layout = QtWidgets.QHBoxLayout()
-        preset_layout.addWidget(QtWidgets.QLabel("Y-axis presets:"))
-        
-        # CSI Samples preset
-        samples_preset_btn = QtWidgets.QPushButton("CSI (0-100)")
-        samples_preset_btn.clicked.connect(lambda: self.set_y_preset(0, 100))
-        preset_layout.addWidget(samples_preset_btn)
-        
-        # Magnitude preset
-        magnitude_preset_btn = QtWidgets.QPushButton("Magnitude (-80-20 dB)")
-        magnitude_preset_btn.clicked.connect(lambda: self.set_y_preset(-80, 20))
-        preset_layout.addWidget(magnitude_preset_btn)
-        
-        # Phase preset
-        phase_preset_btn = QtWidgets.QPushButton("Phase (-π-π)")
-        phase_preset_btn.clicked.connect(lambda: self.set_y_preset(-3.14159, 3.14159))
-        preset_layout.addWidget(phase_preset_btn)
-        
-        # Difference preset
-        diff_preset_btn = QtWidgets.QPushButton("Difference (-20-20)")
-        diff_preset_btn.clicked.connect(lambda: self.set_y_preset(-20, 20))
-        preset_layout.addWidget(diff_preset_btn)
-        
-        preset_layout.addStretch()
-        
-        # Apply button
-        apply_layout = QtWidgets.QHBoxLayout()
-        apply_layout.addStretch()
-        self.apply_axis_button = QtWidgets.QPushButton("Apply Axis Settings")
-        self.apply_axis_button.setEnabled(False)
-        self.apply_axis_button.clicked.connect(self.apply_axis_settings)
-        apply_layout.addWidget(self.apply_axis_button)
-        apply_layout.addStretch()
         
         # Processing options
         processing_layout = QtWidgets.QHBoxLayout()
@@ -344,80 +214,17 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         
         processing_layout.addStretch()
         
-        # Add all layouts to main layout
-        layout.addLayout(x_layout)
-        layout.addLayout(x_preset_layout)
-        layout.addLayout(y_layout)
-        layout.addLayout(preset_layout)
-        layout.addLayout(apply_layout)
+        # Add processing layout to main layout
         layout.addLayout(processing_layout)
         
         panel.setLayout(layout)
         return panel
-    
-    def on_auto_scale_x_changed(self, state):
-        """Handle auto-scale X checkbox change"""
-        self.auto_scale_x = state == QtCore.Qt.Checked
-        self.x_min_spinbox.setEnabled(not self.auto_scale_x)
-        self.x_max_spinbox.setEnabled(not self.auto_scale_x)
-        self.update_apply_button_state()
-        
-        if not self.auto_scale_x:
-            self.apply_axis_settings()
-    
-    def on_auto_scale_y_changed(self, state):
-        """Handle auto-scale Y checkbox change"""
-        self.auto_scale_y = state == QtCore.Qt.Checked
-        self.y_min_spinbox.setEnabled(not self.auto_scale_y)
-        self.y_max_spinbox.setEnabled(not self.auto_scale_y)
-        self.update_apply_button_state()
-        
-        if not self.auto_scale_y:
-            self.apply_axis_settings()
-    
-    def on_x_axis_range_changed(self):
-        """Handle X-axis range spinbox changes"""
-        if not self.auto_scale_x:
-            self.fixed_x_min = self.x_min_spinbox.value()
-            self.fixed_x_max = self.x_max_spinbox.value()
-    
-    def on_y_axis_range_changed(self):
-        """Handle Y-axis range spinbox changes"""
-        if not self.auto_scale_y:
-            self.fixed_y_min = self.y_min_spinbox.value()
-            self.fixed_y_max = self.y_max_spinbox.value()
-    
-    def update_apply_button_state(self):
-        """Update the apply button enabled state"""
-        self.apply_axis_button.setEnabled(not self.auto_scale_x or not self.auto_scale_y)
-    
-    def set_x_preset(self, min_val, max_val):
-        """Set X-axis preset values"""
-        self.x_min_spinbox.setValue(min_val)
-        self.x_max_spinbox.setValue(max_val)
-        if not self.auto_scale_x:
-            self.apply_axis_settings()
-    
-    def set_y_preset(self, min_val, max_val):
-        """Set Y-axis preset values"""
-        self.y_min_spinbox.setValue(min_val)
-        self.y_max_spinbox.setValue(max_val)
-        if not self.auto_scale_y:
-            self.apply_axis_settings()
     
     def on_processing_changed(self):
         """Handle processing mode change"""
         self.show_raw_amplitude = self.raw_amplitude_radio.isChecked()
         self.show_amplitude_diff = self.amplitude_diff_radio.isChecked()
         self.set_baseline_btn.setEnabled(self.show_amplitude_diff)
-        
-        # Update Y-axis presets based on processing mode
-        if self.show_amplitude_diff:
-            # Set suitable range for difference plots
-            self.set_y_preset(-20, 20)
-        else:
-            # Set suitable range for raw amplitude
-            self.set_y_preset(0, 100)
     
     def set_baseline(self):
         """Set current CSI data as baseline for difference calculation"""
@@ -431,31 +238,6 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
                 self.baseline_data[antenna_idx] = magnitude.copy()
         print(f"Baseline set for {len(self.baseline_data)} antennas")
     
-    def apply_axis_settings(self):
-        """Apply axis settings to all plots"""
-        # Update values from spinboxes
-        if not self.auto_scale_x:
-            self.fixed_x_min = self.x_min_spinbox.value()
-            self.fixed_x_max = self.x_max_spinbox.value()
-            
-        if not self.auto_scale_y:
-            self.fixed_y_min = self.y_min_spinbox.value()
-            self.fixed_y_max = self.y_max_spinbox.value()
-            
-        # Apply to all existing plots
-        for antenna_idx in self.plots:
-            # Apply X-axis settings
-            if not self.auto_scale_x:
-                self.plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
-                self.magnitude_plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
-                self.phase_plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
-            
-            # Apply Y-axis settings
-            if not self.auto_scale_y:
-                self.plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
-                self.magnitude_plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
-                self.phase_plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
-        
     def create_plots_for_antenna(self, antenna_idx):
         """Create plots for a new antenna"""
         if antenna_idx in self.plots:
@@ -495,19 +277,6 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         pen = pg.mkPen(color=(0, 255, 0), width=2)
         self.magnitude_lines[antenna_idx] = self.magnitude_plots[antenna_idx].plot(pen=pen)
         
-        # Apply current axis settings
-        if not self.auto_scale_x:
-            self.plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
-            self.magnitude_plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
-            self.phase_plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
-            
-        if not self.auto_scale_y:
-            self.plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
-            self.magnitude_plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
-            # Phase plot keeps its fixed range
-        
-        # Initialize history for this antenna
-        self.csi_data_history[antenna_idx] = deque(maxlen=self.max_history_length)
         # Initialize history for this antenna
         self.csi_data_history[antenna_idx] = deque(maxlen=self.max_history_length)
         
@@ -566,14 +335,6 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         # Update phase plot (always use raw phase, not difference)
         self.phase_lines[antenna_idx].setData(x_data, phase)
         
-        # Apply axis settings for magnitude and phase plots
-        if not self.auto_scale_x:
-            self.plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
-            self.phase_plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
-        if not self.auto_scale_y:
-            self.plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
-            # Phase plot keeps its fixed range [-π, π]
-        
         # Compute and update magnitude spectrum (FFT) - use complex samples for meaningful FFT
         if len(samples) > 1:
             # Compute FFT of complex CSI data
@@ -584,13 +345,6 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
             # Update magnitude spectrum plot
             freq_bins = np.arange(len(magnitude_spectrum_db))
             self.magnitude_lines[antenna_idx].setData(freq_bins, magnitude_spectrum_db)
-            
-            # Apply axis settings for FFT plot
-            if not self.auto_scale_x:
-                self.magnitude_plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
-            if not self.auto_scale_y:
-                # Use appropriate range for magnitude spectrum in dB
-                self.magnitude_plots[antenna_idx].setYRange(-60, 40)  # Typical range for dB magnitude
         
     def update_info_panel(self):
         """Update the information panel"""
