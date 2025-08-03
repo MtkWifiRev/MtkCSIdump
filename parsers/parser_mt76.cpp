@@ -10,7 +10,6 @@
 std::vector<std::vector<double>> ParserMT76::processRawData(void *data, int antIdx)
 {
     std::vector<std::vector<std::complex<double>>> csi_per_antenna(ANTENNA_NUM, std::vector<std::complex<double>>(CSI_BW160_DATA_COUNT));
-    std::vector<double> csi_antenna_real(std::vector<double>(CSI_BW160_DATA_COUNT));
     std::vector<csi_data *> *list = (std::vector<csi_data *>*)data;
     std::vector<std::vector<double>> tones_per_packet[ANTENNA_NUM];
 
@@ -48,26 +47,15 @@ std::vector<std::vector<double>> ParserMT76::processRawData(void *data, int antI
                 int start_idx = (num_subcarriers >= 64) ? 2 : 1;
                 int end_idx = num_subcarriers - 1; // Also skip last subcarrier
                 
-                // Calculate amplitudes and find max for normalization
-                std::vector<double> amplitudes;
-                double max_amplitude = 0.0;
+                // Store raw I/Q pairs (interleaved: I, Q, I, Q, ...)
+                std::vector<double> iq_data;
                 
                 for (int i = start_idx; i < end_idx; i++) {
-                    double amplitude = std::abs(csi_per_antenna[antIdx][i]);
-                    amplitudes.push_back(amplitude);
-                    if (amplitude > max_amplitude) {
-                        max_amplitude = amplitude;
-                    }
+                    iq_data.push_back(static_cast<double>(csi->data_i[i]));
+                    iq_data.push_back(static_cast<double>(csi->data_q[i]));
                 }
                 
-                // Normalize amplitudes to enhance sensitivity
-                if (max_amplitude > 0.0) {
-                    for (size_t i = 0; i < amplitudes.size(); i++) {
-                        amplitudes[i] = (amplitudes[i] / max_amplitude) * 100.0; // Scale to 0-100
-                    }
-                }
-                
-                tones_per_packet[antIdx].push_back(amplitudes);
+                tones_per_packet[antIdx].push_back(iq_data);
             }
             
             //fprintf(stderr, "\tprocessRawData() processed %d subcarriers\n", num_subcarriers);

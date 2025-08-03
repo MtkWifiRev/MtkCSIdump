@@ -275,10 +275,10 @@ void MotionDetector::sendCsiDataUdp(const std::vector<std::vector<double>>& data
         return;
     }
 
-    // Calculate total number of samples
+    // Calculate total number of I/Q pairs (samples / 2 since each sample is I,Q pair)
     uint32_t totalSamples = 0;
     for (const auto& packet : data) {
-        totalSamples += packet.size();
+        totalSamples += packet.size() / 2; // I/Q pairs are interleaved
     }
 
     // Create header
@@ -300,10 +300,15 @@ void MotionDetector::sendCsiDataUdp(const std::vector<std::vector<double>>& data
     memcpy(ptr, &header, sizeof(CsiPacketHeader));
     ptr += sizeof(CsiPacketHeader);
     
-    // Copy CSI data
+    // Copy CSI data as I/Q pairs
     for (const auto& packet : data) {
-        memcpy(ptr, packet.data(), packet.size() * sizeof(double));
-        ptr += packet.size() * sizeof(double);
+        for (size_t i = 0; i < packet.size(); i += 2) {
+            CsiSample sample;
+            sample.i = packet[i];     // I component
+            sample.q = packet[i + 1]; // Q component
+            memcpy(ptr, &sample, sizeof(CsiSample));
+            ptr += sizeof(CsiSample);
+        }
     }
 
     // Send to each UDP client

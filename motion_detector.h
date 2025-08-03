@@ -23,7 +23,8 @@ struct CsiPacketHeader {
 } __attribute__((packed));
 
 struct CsiSample {
-    double value;
+    double i;  // In-phase component
+    double q;  // Quadrature component
 } __attribute__((packed));
 
 class MotionDetector

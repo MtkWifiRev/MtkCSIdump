@@ -17,9 +17,9 @@ import pyqtgraph as pg
 HEADER_FORMAT = '<QIII'  # Little endian: Q=uint64, I=uint32
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
-# Struct format for CsiSample
-# double value
-SAMPLE_FORMAT = '<d'  # Little endian: d=double
+# Struct format for CsiSample (I/Q pair)
+# double i, double q
+SAMPLE_FORMAT = '<dd'  # Little endian: d=double, d=double
 SAMPLE_SIZE = struct.calcsize(SAMPLE_FORMAT)
 
 class CSIData:
@@ -27,7 +27,7 @@ class CSIData:
         self.timestamp = 0
         self.antenna_idx = 0
         self.packet_count = 0
-        self.samples = []
+        self.samples = []  # Now contains complex numbers (I+jQ)
         self.addr = None
 
 class CSIReceiver(QtCore.QObject):
@@ -61,13 +61,17 @@ class CSIReceiver(QtCore.QObject):
                     timestamp, antenna_idx, packet_count, total_samples = struct.unpack(
                         HEADER_FORMAT, data[:HEADER_SIZE])
                     
-                    # Parse CSI samples
+                    # Parse CSI samples (I/Q pairs)
                     samples_data = data[HEADER_SIZE:]
                     num_samples = len(samples_data) // SAMPLE_SIZE
                     
                     samples = []
                     if num_samples > 0:
-                        samples = list(struct.unpack(f'<{num_samples}d', samples_data))
+                        # Unpack I/Q pairs and create complex numbers
+                        iq_values = list(struct.unpack(f'<{num_samples * 2}d', samples_data))
+                        for i in range(0, len(iq_values), 2):
+                            complex_sample = complex(iq_values[i], iq_values[i + 1])
+                            samples.append(complex_sample)
                     
                     # Create CSI data object
                     csi_data = CSIData()
@@ -246,6 +250,10 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         sc_80_btn.clicked.connect(lambda: self.set_x_preset(0, 256))
         x_preset_layout.addWidget(sc_80_btn)
         
+        sc_160_btn = QtWidgets.QPushButton("160MHz (0-512)")
+        sc_160_btn.clicked.connect(lambda: self.set_x_preset(0, 512))
+        x_preset_layout.addWidget(sc_160_btn)
+        
         x_preset_layout.addStretch()
         
         # Y-axis controls
@@ -417,7 +425,10 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         for antenna_idx, history in self.csi_data_history.items():
             if history:
                 latest_data = history[-1]
-                self.baseline_data[antenna_idx] = np.array(latest_data.samples.copy())
+                # Store magnitude of complex samples as baseline
+                complex_samples = np.array(latest_data.samples)
+                magnitude = np.abs(complex_samples)
+                self.baseline_data[antenna_idx] = magnitude.copy()
         print(f"Baseline set for {len(self.baseline_data)} antennas")
     
     def apply_axis_settings(self):
@@ -452,36 +463,37 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
             
         row = antenna_idx
         
-        # Raw CSI samples plot
+        # Magnitude plot (from complex CSI data)
         self.plots[antenna_idx] = self.plot_widget.addPlot(
-            row=row, col=0, title=f"CSI Samples - Antenna {antenna_idx}")
-        self.plots[antenna_idx].setLabel('left', 'Amplitude')
-        self.plots[antenna_idx].setLabel('bottom', 'Sample Index')
+            row=row, col=0, title=f"CSI Magnitude - Antenna {antenna_idx}")
+        self.plots[antenna_idx].setLabel('left', 'Magnitude')
+        self.plots[antenna_idx].setLabel('bottom', 'Subcarrier Index')
         self.plots[antenna_idx].showGrid(True, True)
         
         # Create line for this antenna
         pen = pg.mkPen(color=(255, 0, 0), width=2)
         self.plot_lines[antenna_idx] = self.plots[antenna_idx].plot(pen=pen)
         
-        # Magnitude plot (FFT)
+        # Phase plot (from complex CSI data)
+        self.phase_plots[antenna_idx] = self.plot_widget.addPlot(
+            row=row, col=1, title=f"CSI Phase - Antenna {antenna_idx}")
+        self.phase_plots[antenna_idx].setLabel('left', 'Phase (radians)')
+        self.phase_plots[antenna_idx].setLabel('bottom', 'Subcarrier Index')
+        self.phase_plots[antenna_idx].showGrid(True, True)
+        self.phase_plots[antenna_idx].setYRange(-3.15, 3.15)  # Phase range is [-π, π]
+        
+        pen = pg.mkPen(color=(0, 0, 255), width=2)
+        self.phase_lines[antenna_idx] = self.phase_plots[antenna_idx].plot(pen=pen)
+        
+        # Magnitude Spectrum plot (FFT of CSI data)
         self.magnitude_plots[antenna_idx] = self.plot_widget.addPlot(
-            row=row, col=1, title=f"Magnitude Spectrum - Antenna {antenna_idx}")
+            row=row, col=2, title=f"Magnitude Spectrum (FFT) - Antenna {antenna_idx}")
         self.magnitude_plots[antenna_idx].setLabel('left', 'Magnitude (dB)')
         self.magnitude_plots[antenna_idx].setLabel('bottom', 'Frequency Bin')
         self.magnitude_plots[antenna_idx].showGrid(True, True)
         
         pen = pg.mkPen(color=(0, 255, 0), width=2)
         self.magnitude_lines[antenna_idx] = self.magnitude_plots[antenna_idx].plot(pen=pen)
-        
-        # Phase plot
-        self.phase_plots[antenna_idx] = self.plot_widget.addPlot(
-            row=row, col=2, title=f"Phase - Antenna {antenna_idx}")
-        self.phase_plots[antenna_idx].setLabel('left', 'Phase (radians)')
-        self.phase_plots[antenna_idx].setLabel('bottom', 'Frequency Bin')
-        self.phase_plots[antenna_idx].showGrid(True, True)
-        
-        pen = pg.mkPen(color=(0, 0, 255), width=2)
-        self.phase_lines[antenna_idx] = self.phase_plots[antenna_idx].plot(pen=pen)
         
         # Apply current axis settings
         if not self.auto_scale_x:
@@ -492,8 +504,10 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         if not self.auto_scale_y:
             self.plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
             self.magnitude_plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
-            self.phase_plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
+            # Phase plot keeps its fixed range
         
+        # Initialize history for this antenna
+        self.csi_data_history[antenna_idx] = deque(maxlen=self.max_history_length)
         # Initialize history for this antenna
         self.csi_data_history[antenna_idx] = deque(maxlen=self.max_history_length)
         
@@ -520,63 +534,63 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         if not csi_data.samples:
             return
             
+        # Convert complex samples to numpy array
         samples = np.array(csi_data.samples)
+        
+        # Calculate magnitude and phase from complex data
+        magnitude = np.abs(samples)
+        phase = np.angle(samples)
         
         # Process data based on selected mode
         if self.show_amplitude_diff and antenna_idx in self.baseline_data:
             # Show difference from baseline
             baseline = self.baseline_data[antenna_idx]
-            if len(baseline) == len(samples):
-                processed_samples = samples - baseline
+            if len(baseline) == len(magnitude):
+                processed_magnitude = magnitude - baseline
                 plot_title_suffix = " (Difference from Baseline)"
             else:
-                processed_samples = samples
+                processed_magnitude = magnitude
                 plot_title_suffix = " (Raw - Baseline size mismatch)"
         else:
-            # Show raw amplitude
-            processed_samples = samples
-            plot_title_suffix = " (Raw Amplitude)"
+            # Show raw magnitude
+            processed_magnitude = magnitude
+            plot_title_suffix = " (Raw)"
         
-        # Update raw CSI samples plot
-        x_data = np.arange(len(processed_samples))
-        self.plot_lines[antenna_idx].setData(x_data, processed_samples)
+        # Update magnitude plot
+        x_data = np.arange(len(processed_magnitude))
+        self.plot_lines[antenna_idx].setData(x_data, processed_magnitude)
         
-        # Update plot title to reflect processing mode
-        self.plots[antenna_idx].setTitle(f"CSI Samples - Antenna {antenna_idx}{plot_title_suffix}")
+        # Update magnitude plot title
+        self.plots[antenna_idx].setTitle(f"CSI Magnitude - Antenna {antenna_idx}{plot_title_suffix}")
         
-        # Apply axis settings for raw samples plot
+        # Update phase plot (always use raw phase, not difference)
+        self.phase_lines[antenna_idx].setData(x_data, phase)
+        
+        # Apply axis settings for magnitude and phase plots
         if not self.auto_scale_x:
             self.plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
+            self.phase_plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
         if not self.auto_scale_y:
             self.plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
+            # Phase plot keeps its fixed range [-π, π]
         
-        # Compute and update magnitude spectrum (FFT) - always use raw samples for FFT
+        # Compute and update magnitude spectrum (FFT) - use complex samples for meaningful FFT
         if len(samples) > 1:
-            # Compute FFT
+            # Compute FFT of complex CSI data
             fft_data = np.fft.fft(samples)
-            magnitude = np.abs(fft_data)
-            magnitude_db = 20 * np.log10(magnitude + 1e-10)  # Add small value to avoid log(0)
+            magnitude_spectrum = np.abs(fft_data)
+            magnitude_spectrum_db = 20 * np.log10(magnitude_spectrum + 1e-10)  # Add small value to avoid log(0)
             
-            # Update magnitude plot
-            freq_bins = np.arange(len(magnitude_db))
-            self.magnitude_lines[antenna_idx].setData(freq_bins, magnitude_db)
+            # Update magnitude spectrum plot
+            freq_bins = np.arange(len(magnitude_spectrum_db))
+            self.magnitude_lines[antenna_idx].setData(freq_bins, magnitude_spectrum_db)
             
-            # Update phase plot
-            phase = np.angle(fft_data)
-            self.phase_lines[antenna_idx].setData(freq_bins, phase)
-            
-            # Apply axis settings for FFT plots
+            # Apply axis settings for FFT plot
             if not self.auto_scale_x:
                 self.magnitude_plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
-                self.phase_plots[antenna_idx].setXRange(self.fixed_x_min, self.fixed_x_max)
             if not self.auto_scale_y:
-                # Use different Y ranges for magnitude and phase plots
-                if self.show_amplitude_diff:
-                    # For difference mode, use wider range for magnitude plot
-                    self.magnitude_plots[antenna_idx].setYRange(-100, 100)
-                else:
-                    self.magnitude_plots[antenna_idx].setYRange(self.fixed_y_min, self.fixed_y_max)
-                self.phase_plots[antenna_idx].setYRange(-3.15, 3.15)  # Phase always -π to π
+                # Use appropriate range for magnitude spectrum in dB
+                self.magnitude_plots[antenna_idx].setYRange(-60, 40)  # Typical range for dB magnitude
         
     def update_info_panel(self):
         """Update the information panel"""
