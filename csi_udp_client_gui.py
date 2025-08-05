@@ -121,7 +121,7 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         
     def setupUI(self):
         self.setWindowTitle(f"CSI Visualizer - Connected to {self.server_ip}:{self.server_port}")
-        self.setGeometry(100, 100, 1600, 900)
+        self.setGeometry(100, 100, 2000, 900)  # Increased width to accommodate waterfall plot
         
         # Create central widget and layout
         central_widget = QtWidgets.QWidget()
@@ -132,6 +132,26 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         
         # Create plot widget
         self.plot_widget = pg.GraphicsLayoutWidget()
+        
+        # Configure plot widget
+        self.plot_widget.setBackground('w')
+        
+        # Initialize processing options
+        self.show_raw_amplitude = True
+        self.show_amplitude_diff = False
+        self.baseline_data = {}  # Store baseline for difference calculation
+        
+        # Initialize plots dictionary
+        self.plots = {}
+        self.plot_lines = {}
+        self.phase_plots = {}
+        self.phase_lines = {}
+        self.magnitude_plots = {}
+        self.magnitude_lines = {}
+        self.waterfall_plots = {}
+        self.waterfall_images = {}
+        self.waterfall_data = {}  # Store waterfall data for each antenna
+        self.waterfall_max_rows = 50  # Maximum number of time samples to display (reduced from 200)
         
         # Create layout
         layout = QtWidgets.QVBoxLayout()
@@ -151,22 +171,6 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.plot_widget)
         
         central_widget.setLayout(layout)
-        
-        # Configure plot widget
-        self.plot_widget.setBackground('w')
-        
-        # Initialize processing options
-        self.show_raw_amplitude = True
-        self.show_amplitude_diff = False
-        self.baseline_data = {}  # Store baseline for difference calculation
-        
-        # Initialize plots dictionary
-        self.plots = {}
-        self.plot_lines = {}
-        self.phase_plots = {}
-        self.phase_lines = {}
-        self.magnitude_plots = {}
-        self.magnitude_lines = {}
         
         # Setup timer for UI updates
         self.update_timer = QtCore.QTimer()
@@ -190,7 +194,7 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
     def create_axis_control_panel(self):
         """Create a control panel for processing options"""
         panel = QtWidgets.QGroupBox("Processing Controls")
-        panel.setMaximumHeight(80)
+        panel.setMaximumHeight(110)  # Increased height for additional controls
         
         layout = QtWidgets.QVBoxLayout()
         
@@ -214,8 +218,28 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         
         processing_layout.addStretch()
         
-        # Add processing layout to main layout
+        # Waterfall options
+        waterfall_layout = QtWidgets.QHBoxLayout()
+        waterfall_layout.addWidget(QtWidgets.QLabel("Waterfall:"))
+        
+        self.show_waterfall_checkbox = QtWidgets.QCheckBox("Show Waterfall Plots")
+        self.show_waterfall_checkbox.setChecked(True)
+        self.show_waterfall_checkbox.toggled.connect(self.on_waterfall_visibility_changed)
+        waterfall_layout.addWidget(self.show_waterfall_checkbox)
+        
+        waterfall_layout.addWidget(QtWidgets.QLabel("History Length:"))
+        self.waterfall_history_spinbox = QtWidgets.QSpinBox()
+        self.waterfall_history_spinbox.setRange(20, 200)  # Reduced range from 50-500 to 20-200
+        self.waterfall_history_spinbox.setValue(self.waterfall_max_rows)
+        self.waterfall_history_spinbox.setSuffix(" packets")
+        self.waterfall_history_spinbox.valueChanged.connect(self.on_waterfall_history_changed)
+        waterfall_layout.addWidget(self.waterfall_history_spinbox)
+        
+        waterfall_layout.addStretch()
+        
+        # Add layouts to main layout
         layout.addLayout(processing_layout)
+        layout.addLayout(waterfall_layout)
         
         panel.setLayout(layout)
         return panel
@@ -225,6 +249,19 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         self.show_raw_amplitude = self.raw_amplitude_radio.isChecked()
         self.show_amplitude_diff = self.amplitude_diff_radio.isChecked()
         self.set_baseline_btn.setEnabled(self.show_amplitude_diff)
+    
+    def on_waterfall_visibility_changed(self, checked):
+        """Handle waterfall plot visibility toggle"""
+        for antenna_idx in self.waterfall_plots:
+            self.waterfall_plots[antenna_idx].setVisible(checked)
+    
+    def on_waterfall_history_changed(self, value):
+        """Handle waterfall history length change"""
+        self.waterfall_max_rows = value
+        # Trim existing data if necessary
+        for antenna_idx in self.waterfall_data:
+            if len(self.waterfall_data[antenna_idx]) > value:
+                self.waterfall_data[antenna_idx] = self.waterfall_data[antenna_idx][-value:]
     
     def set_baseline(self):
         """Set current CSI data as baseline for difference calculation"""
@@ -276,6 +313,26 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         
         pen = pg.mkPen(color=(0, 255, 0), width=2)
         self.magnitude_lines[antenna_idx] = self.magnitude_plots[antenna_idx].plot(pen=pen)
+        
+        # Waterfall plot (CSI magnitude over time)
+        self.waterfall_plots[antenna_idx] = self.plot_widget.addPlot(
+            row=row, col=3, title=f"CSI Waterfall - Antenna {antenna_idx}")
+        self.waterfall_plots[antenna_idx].setLabel('left', 'Time (Newest → Oldest)')
+        self.waterfall_plots[antenna_idx].setLabel('bottom', 'Subcarrier Index')
+        
+        # Create ImageItem for waterfall display
+        self.waterfall_images[antenna_idx] = pg.ImageItem()
+        self.waterfall_plots[antenna_idx].addItem(self.waterfall_images[antenna_idx])
+        
+        # Set up colormap for waterfall (viridis-like colormap)
+        colormap = pg.ColorMap(
+            pos=[0.0, 0.25, 0.5, 0.75, 1.0],
+            color=[(68, 1, 84), (59, 82, 139), (33, 144, 140), (94, 201, 98), (253, 231, 37)]
+        )
+        self.waterfall_images[antenna_idx].setColorMap(colormap)
+        
+        # Initialize waterfall data storage
+        self.waterfall_data[antenna_idx] = []
         
         # Initialize history for this antenna
         self.csi_data_history[antenna_idx] = deque(maxlen=self.max_history_length)
@@ -345,6 +402,68 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
             # Update magnitude spectrum plot
             freq_bins = np.arange(len(magnitude_spectrum_db))
             self.magnitude_lines[antenna_idx].setData(freq_bins, magnitude_spectrum_db)
+        
+        # Update waterfall plot
+        self.update_waterfall_plot(antenna_idx, processed_magnitude)
+        
+    def update_waterfall_plot(self, antenna_idx, magnitude_data):
+        """Update the waterfall plot with new magnitude data"""
+        if antenna_idx not in self.waterfall_data:
+            return
+            
+        # Add new magnitude data to waterfall history
+        self.waterfall_data[antenna_idx].append(magnitude_data.copy())
+        
+        # Limit the number of rows (time samples)
+        if len(self.waterfall_data[antenna_idx]) > self.waterfall_max_rows:
+            self.waterfall_data[antenna_idx].pop(0)
+        
+        # Convert to numpy array for display
+        if len(self.waterfall_data[antenna_idx]) > 1:
+            waterfall_array = np.array(self.waterfall_data[antenna_idx])
+            
+            # Ensure consistent array shape by padding shorter arrays with zeros
+            max_length = max(len(row) for row in self.waterfall_data[antenna_idx])
+            padded_data = []
+            for row in self.waterfall_data[antenna_idx]:
+                if len(row) < max_length:
+                    padded_row = np.pad(row, (0, max_length - len(row)), 'constant', constant_values=0)
+                    padded_data.append(padded_row)
+                else:
+                    padded_data.append(row)
+            
+            waterfall_array = np.array(padded_data)
+            
+            # Transpose so time is on Y-axis (rows) and subcarriers on X-axis (columns)
+            # Note: Most recent data should be at the top, so we flip the array
+            waterfall_array = np.flipud(waterfall_array)
+            
+            # Update the image with proper scaling
+            self.waterfall_images[antenna_idx].setImage(
+                waterfall_array,
+                autoLevels=False,  # Use manual levels for better control
+                autoDownsample=True
+            )
+            
+            # Set manual levels for better contrast
+            data_min = np.min(waterfall_array)
+            data_max = np.max(waterfall_array)
+            if data_max > data_min:
+                self.waterfall_images[antenna_idx].setLevels([data_min, data_max])
+            
+            # Set the correct positioning and scaling
+            num_time_samples = len(self.waterfall_data[antenna_idx])
+            num_subcarriers = waterfall_array.shape[1]
+            
+            # Set the image rectangle (x, y, width, height)
+            # Position image so that bottom is time=0 and top is most recent
+            self.waterfall_images[antenna_idx].setRect(
+                QtCore.QRectF(0, 0, num_subcarriers, num_time_samples)
+            )
+            
+            # Update plot range to show the full waterfall
+            self.waterfall_plots[antenna_idx].setXRange(0, num_subcarriers)
+            self.waterfall_plots[antenna_idx].setYRange(0, num_time_samples)
         
     def update_info_panel(self):
         """Update the information panel"""
