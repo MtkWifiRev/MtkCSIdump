@@ -339,7 +339,7 @@ public:
         return ret;
     }
 
-    int motion_detection_start(const char *wifi, u32 interval)
+    int motion_detection_start(const char *wifi)
     {
         int band, if_idx;
         int ret = 0;
@@ -416,9 +416,9 @@ std::vector<csi_data *> *MT76API::motion_detection_dump(const char *wifi, int pk
     return d->motion_detection_dump(wifi, pkt_num);
 }
 
-int MT76API::motion_detection_start(const char *wifi, u32 interval)
+int MT76API::motion_detection_start(const char *wifi)
 {
-    return d->motion_detection_start(wifi, interval);
+    return d->motion_detection_start(wifi);
 }
 
 int MT76API::motion_detection_stop(const char *wifi)

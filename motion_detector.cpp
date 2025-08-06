@@ -28,10 +28,9 @@ void MotionDetector::runMonitoring()
 
 
     while (!stopFlag.load()) {
-        // pkt_num = (time from last[ms] / interval) * 4
         currTime = std::chrono::steady_clock::now();
         diff = std::chrono::duration_cast<std::chrono::milliseconds>(currTime - oldTime).count();
-        //pkt_num = (diff / interval) * 4;;
+        //TODO should we make this be based on the interval parameter again?
         pkt_num = 100;
         std::vector<csi_data *> *list = wifi.motion_detection_dump(ifname.c_str(), pkt_num);
         oldTime = currTime;
@@ -43,10 +42,6 @@ void MotionDetector::runMonitoring()
             if (list) {
                 std::vector<std::vector<double>> parsed_data = parser.processRawData(list, i);
                 if (parsed_data.size()) {
-                    //fprintf(stderr, "!!!!!!!!!!! found data: %d !!!!!!!!!!!!!!!\n", parsed_data.size());
-                    for (int j = 0; j < parsed_data.size(); j++) {
-                        //fprintf(stderr, "!!!!!!!!!!! found packets inside data: #[%d] %d !!!!!!!!!!!!!!!\n", j, parsed_data[j].size());
-                    }
                     // Send CSI data via UDP if server is running
                     if (udpServerRunning) {
                         // Send each packet separately instead of concatenating
@@ -57,12 +52,8 @@ void MotionDetector::runMonitoring()
                             }
                         }
                     }
-                } else {
-                    //fprintf(stderr, "Dump List Empty!\n");
-                }
-            } else {
-                //fprintf(stderr, "Dump List NULL!\n");
-            }
+                } 
+            } 
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(interval));
@@ -102,7 +93,7 @@ int MotionDetector::startMonitoring(std::string ifname, unsigned interval)
     this->ifname = ifname;
     this->interval = interval;
 
-    ret = wifi.motion_detection_start(this->ifname.c_str(), this->interval);
+    ret = wifi.motion_detection_start(this->ifname.c_str());
     startMon = std::chrono::steady_clock::now();
     if (!ret)
     {

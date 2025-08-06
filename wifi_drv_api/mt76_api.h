@@ -52,7 +52,7 @@ public:
     MT76API();
     ~MT76API();
 
-    int motion_detection_start(const char *wifi, u32 interval);
+    int motion_detection_start(const char *wifi);
     int motion_detection_stop(const char *wifi);
     std::vector<csi_data *> *motion_detection_dump(const char *wifi, int pkt_num);
 
