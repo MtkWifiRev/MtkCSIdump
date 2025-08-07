@@ -1,6 +1,6 @@
 # CSI UDP Client with GUI Visualization
 
-This is an enhanced version of the CSI UDP client that includes a real-time graphical visualization similar to the nexmon_csi_gui project.
+CSI UDP client to display real-time CSI data. Based on https://github.com/LukasVirecGL/meta-gl-motion-detection.
 
 ## Features
 
@@ -35,7 +35,7 @@ python3 csi_udp_client_gui.py 8888
 ```
 
 ## Dependencies OpenWRT
-install with `opkg install <dependency`
+install with `opkg install <dependency>`
 - libnl-tiny1
 - libstdcpp
 
