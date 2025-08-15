@@ -12,6 +12,8 @@ import numpy as np
 from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 
+# disclaimer: this is mostly AI slop
+
 # Struct format for CsiPacketHeader
 # uint64_t timestamp, uint32_t antenna_idx, uint32_t packet_count, uint32_t total_samples
 HEADER_FORMAT = '<QIII'  # Little endian: Q=uint64, I=uint32
@@ -141,6 +143,10 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         self.show_amplitude_diff = False
         self.baseline_data = {}  # Store baseline for difference calculation
         
+        # CSI processing options
+        self.remove_dc_subcarrier = True  # Remove center subcarrier spike
+        self.remove_dc_offset = False     # Remove DC offset from I/Q data
+        
         # Initialize plots dictionary
         self.plots = {}
         self.plot_lines = {}
@@ -194,7 +200,7 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
     def create_axis_control_panel(self):
         """Create a control panel for processing options"""
         panel = QtWidgets.QGroupBox("Processing Controls")
-        panel.setMaximumHeight(110)  # Increased height for additional controls
+        panel.setMaximumHeight(140)  # Increased height for additional DC processing controls
         
         layout = QtWidgets.QVBoxLayout()
         
@@ -237,9 +243,28 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         
         waterfall_layout.addStretch()
         
+        # CSI Processing options
+        csi_processing_layout = QtWidgets.QHBoxLayout()
+        csi_processing_layout.addWidget(QtWidgets.QLabel("CSI Processing:"))
+        
+        self.remove_dc_subcarrier_checkbox = QtWidgets.QCheckBox("Remove DC Subcarrier")
+        self.remove_dc_subcarrier_checkbox.setChecked(self.remove_dc_subcarrier)
+        self.remove_dc_subcarrier_checkbox.toggled.connect(self.on_dc_processing_changed)
+        self.remove_dc_subcarrier_checkbox.setToolTip("Remove the center frequency spike (DC subcarrier) by interpolating from neighbors")
+        csi_processing_layout.addWidget(self.remove_dc_subcarrier_checkbox)
+        
+        self.remove_dc_offset_checkbox = QtWidgets.QCheckBox("Remove DC Offset")
+        self.remove_dc_offset_checkbox.setChecked(self.remove_dc_offset)
+        self.remove_dc_offset_checkbox.toggled.connect(self.on_dc_processing_changed)
+        self.remove_dc_offset_checkbox.setToolTip("Remove DC offset from I/Q data by subtracting the mean")
+        csi_processing_layout.addWidget(self.remove_dc_offset_checkbox)
+        
+        csi_processing_layout.addStretch()
+        
         # Add layouts to main layout
         layout.addLayout(processing_layout)
         layout.addLayout(waterfall_layout)
+        layout.addLayout(csi_processing_layout)
         
         panel.setLayout(layout)
         return panel
@@ -263,6 +288,11 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
             if len(self.waterfall_data[antenna_idx]) > value:
                 self.waterfall_data[antenna_idx] = self.waterfall_data[antenna_idx][-value:]
     
+    def on_dc_processing_changed(self):
+        """Handle DC processing options change"""
+        self.remove_dc_subcarrier = self.remove_dc_subcarrier_checkbox.isChecked()
+        self.remove_dc_offset = self.remove_dc_offset_checkbox.isChecked()
+    
     def set_baseline(self):
         """Set current CSI data as baseline for difference calculation"""
         self.baseline_data.clear()
@@ -274,6 +304,27 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
                 magnitude = np.abs(complex_samples)
                 self.baseline_data[antenna_idx] = magnitude.copy()
         print(f"Baseline set for {len(self.baseline_data)} antennas")
+    
+    def process_csi_samples(self, samples):
+        """Process CSI samples to remove DC components and artifacts"""
+        processed_samples = np.array(samples, dtype=complex)
+        
+        # Remove DC offset from I/Q data
+        if self.remove_dc_offset and len(processed_samples) > 0:
+            # Remove mean from I and Q components separately
+            mean_i = np.mean(processed_samples.real)
+            mean_q = np.mean(processed_samples.imag)
+            processed_samples = processed_samples - complex(mean_i, mean_q)
+        
+        # Remove DC subcarrier (center frequency spike)
+        if self.remove_dc_subcarrier and len(processed_samples) > 2:
+            center_idx = len(processed_samples) // 2
+            # Set center subcarrier to average of neighbors
+            if center_idx > 0 and center_idx < len(processed_samples) - 1:
+                processed_samples[center_idx] = (processed_samples[center_idx - 1] + 
+                                               processed_samples[center_idx + 1]) / 2
+        
+        return processed_samples
     
     def create_plots_for_antenna(self, antenna_idx):
         """Create plots for a new antenna"""
@@ -360,12 +411,13 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         if not csi_data.samples:
             return
             
-        # Convert complex samples to numpy array
-        samples = np.array(csi_data.samples)
+        # Convert complex samples to numpy array and process
+        raw_samples = np.array(csi_data.samples)
+        processed_samples = self.process_csi_samples(raw_samples)
         
-        # Calculate magnitude and phase from complex data
-        magnitude = np.abs(samples)
-        phase = np.angle(samples)
+        # Calculate magnitude and phase from processed complex data
+        magnitude = np.abs(processed_samples)
+        phase = np.angle(processed_samples)
         
         # Process data based on selected mode
         if self.show_amplitude_diff and antenna_idx in self.baseline_data:
@@ -393,9 +445,9 @@ class CSIVisualizerWindow(QtWidgets.QMainWindow):
         self.phase_lines[antenna_idx].setData(x_data, phase)
         
         # Compute and update magnitude spectrum (FFT) - use complex samples for meaningful FFT
-        if len(samples) > 1:
-            # Compute FFT of complex CSI data
-            fft_data = np.fft.fft(samples)
+        if len(processed_samples) > 1:
+            # Compute FFT of processed complex CSI data
+            fft_data = np.fft.fft(processed_samples)
             magnitude_spectrum = np.abs(fft_data)
             magnitude_spectrum_db = 20 * np.log10(magnitude_spectrum + 1e-10)  # Add small value to avoid log(0)
             
