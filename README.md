@@ -35,6 +35,14 @@ python3 csi_udp_client_gui.py 8888
 ```
 
 ## Dependencies OpenWRT
+
+### Base Image: tested on:
+-  [24.10.1 (r28597-0425664679)](https://firmware-selector.openwrt.org/?version=24.10.1&target=mediatek%2Ffilogic&id=openwrt_one)
+
+### Patched mt76
+- see released for binaries: `mt76.ko`, `mt76-connac-lib.ko`, `mt7915e.ko`
+
+### Additional Packages
 install with `opkg install <dependency>`
 - libnl-tiny1
 - libstdcpp
