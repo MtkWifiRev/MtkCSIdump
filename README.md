@@ -10,7 +10,7 @@ CSI UDP client to display real-time CSI data. Based on https://github.com/LukasV
 - Magnitude spectrum (FFT) visualization
 - Phase visualization
 
-## Usage
+## Usage (after dependencies are fulfilled)
 
 ### Setting up the Server
 
@@ -41,6 +41,8 @@ python3 csi_udp_client_gui.py 8888
 
 ### Patched mt76
 - see release for binaries: `mt76.ko`, `mt76-connac-lib.ko`, `mt7915e.ko`
+- Use these binaries to overwrite whats in: `/lib/modules/6.6.86/`
+- Reboot
 
 ### Additional Packages
 install with `opkg install <dependency>`
