@@ -12,6 +12,9 @@ CSI UDP client to display real-time CSI data. Based on https://github.com/LukasV
 
 ## Usage (after dependencies are fulfilled)
 
+### Connect to a wireless network as client
+- can be done using the webinterface using "scan". 
+
 ### Setting up the Server
 
 ```bash
