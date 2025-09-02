@@ -1,13 +1,12 @@
 # CSI UDP Client with GUI Visualization
 
-CSI UDP client to display real-time CSI data. Based on https://github.com/LukasVirecGL/meta-gl-motion-detection.
+CSI server and client to display real-time CSI data. Based on https://github.com/LukasVirecGL/meta-gl-motion-detection.
 
 ## Features
 
 - Real-time CSI data visualization
 - Multiple antenna support with separate plots
 - Raw CSI samples display
-- Magnitude spectrum (FFT) visualization
 - Phase visualization
 
 ## Usage (after dependencies are fulfilled)
@@ -42,15 +41,18 @@ python3 csi_udp_client_gui.py 8888
 ### Base Image: tested on for OpenWRT One:
 -  see releases for squashfs update bin, based on [24.10.1 (r28597-0425664679)](https://firmware-selector.openwrt.org/?version=24.10.1&target=mediatek%2Ffilogic&id=openwrt_one)
 
-### Patched mt76
-- see release for binaries: `mt76.ko`, `mt76-connac-lib.ko`, `mt7915e.ko`
-- Use these binaries to overwrite whats in: `/lib/modules/6.6.86/`
+### Copy mt76 firmware:
+- see releses for binaries: `mt7981_rom_patch.bin`, `mt7981_wa.bin`, `mt7981_wm.bin`, `mt7981_wo.bin`
+- copy them to `/lib/firmware/mediatek/`
 - Reboot
 
 ### Additional Packages
 install with `opkg install <dependency>`
 - libnl-tiny1
 - libstdcpp
+
+### Copy CSIdump binary to OpenWRT
+- see releases for `CSIDump` binary
 
 ## Dependencies Python UI
 
