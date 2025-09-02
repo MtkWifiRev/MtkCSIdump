@@ -28,12 +28,12 @@ Example:
 ### Running the GUI Client
 
 ```bash
-python3 csi_udp_client_gui.py <port>
+python3 csi_udp_client_gui.py <server ip> <port>
 ```
 
 Example:
 ```bash
-python3 csi_udp_client_gui.py 8888
+python3 csi_udp_client_gui.py 192.168.1.1 8888
 ```
 
 ## Dependencies OpenWRT
@@ -46,7 +46,7 @@ python3 csi_udp_client_gui.py 8888
 - copy them to `/lib/firmware/mediatek/`
 - Reboot
 
-### Additional Packages
+### Additional Packages (might not be necessary)
 install with `opkg install <dependency>`
 - libnl-tiny1
 - libstdcpp
